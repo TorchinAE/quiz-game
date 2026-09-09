@@ -1,3 +1,4 @@
+
 name: CI/CD
 
 on:
@@ -9,9 +10,9 @@ on:
 
 
 jobs:
-  # =========================
+  # ==========================================
   # LINT
-  # =========================
+  # ==========================================
   lint:
     runs-on: ubuntu-latest
 
@@ -34,9 +35,9 @@ jobs:
         run: ruff check .
 
 
-  # =========================
+  # ==========================================
   # TEST
-  # =========================
+  # ==========================================
   test:
     runs-on: ubuntu-latest
 
@@ -67,9 +68,9 @@ jobs:
           path: coverage.xml
 
 
-  # =========================
+  # ==========================================
   # DEPLOY
-  # =========================
+  # ==========================================
   deploy:
     needs: [lint, test]
 
@@ -98,7 +99,7 @@ jobs:
             echo "======================================"
 
             # --------------------------------------
-            # Project directory
+            # Project
             # --------------------------------------
 
             cd /home/mi/quiz-game
@@ -114,7 +115,7 @@ jobs:
             git reset --hard origin/quiz-game
 
             # --------------------------------------
-            # Python virtual environment
+            # Python environment
             # --------------------------------------
 
             echo "Setting up Python environment..."
@@ -151,7 +152,7 @@ jobs:
             sudo rm -f /etc/nginx/sites-enabled/default
 
             # --------------------------------------
-            # Test nginx configuration
+            # Nginx config test
             # --------------------------------------
 
             echo "Testing nginx configuration..."
@@ -167,50 +168,34 @@ jobs:
             sudo systemctl reload nginx
 
             # --------------------------------------
-            # Stop old Uvicorn process
+            # Restart application
             # --------------------------------------
 
-            echo "Stopping old Uvicorn process..."
+            echo "Restarting quiz-game service..."
 
-            pkill -f '[u]vicorn.*app.main:app' || true
-
-            sleep 2
+            sudo systemctl restart quiz-game
 
             # --------------------------------------
-            # Start Uvicorn
+            # Check application service
             # --------------------------------------
 
-            echo "Starting Uvicorn..."
+            echo "Checking quiz-game service..."
 
-            nohup /home/mi/quiz-game/venv/bin/python -u -c \
-              "import uvicorn; uvicorn.run(
-                'app.main:app',
-                host='0.0.0.0',
-                port=8080
-              )" \
-              >> /home/mi/quiz-game/quiz-game.log 2>&1 &
-
-            # --------------------------------------
-            # Give application time to start
-            # --------------------------------------
-
-            sleep 3
-
-            # --------------------------------------
-            # Check application process
-            # --------------------------------------
-
-            if pgrep -f '[u]vicorn.*app.main:app' > /dev/null; then
-              echo "Uvicorn is running."
+            if sudo systemctl is-active --quiet quiz-game; then
+              echo "quiz-game service is running."
             else
-              echo "ERROR: Uvicorn failed to start."
-              echo "Last application logs:"
-              tail -n 100 /home/mi/quiz-game/quiz-game.log || true
+              echo "ERROR: quiz-game service failed to start."
+              echo ""
+              echo "Service status:"
+              sudo systemctl status quiz-game --no-pager || true
+              echo ""
+              echo "Application logs:"
+              sudo journalctl -u quiz-game -n 100 --no-pager || true
               exit 1
             fi
 
             # --------------------------------------
-            # Check local HTTP endpoint
+            # Check local application
             # --------------------------------------
 
             echo "Checking application on port 8080..."
@@ -218,19 +203,30 @@ jobs:
             if curl -fsS http://127.0.0.1:8080/ > /dev/null; then
               echo "Application is responding."
             else
-              echo "WARNING: Application did not respond to HTTP request."
-              echo "Last application logs:"
-              tail -n 100 /home/mi/quiz-game/quiz-game.log || true
+              echo "ERROR: Application is not responding."
+              echo ""
+              echo "Application logs:"
+              sudo journalctl -u quiz-game -n 100 --no-pager || true
               exit 1
             fi
 
             # --------------------------------------
-            # Final nginx check
+            # Check nginx
             # --------------------------------------
 
-            echo "Checking nginx status..."
+            echo "Checking nginx..."
 
-            sudo systemctl is-active --quiet nginx
+            if sudo systemctl is-active --quiet nginx; then
+              echo "nginx is running."
+            else
+              echo "ERROR: nginx is not running."
+              sudo systemctl status nginx --no-pager || true
+              exit 1
+            fi
+
+            # --------------------------------------
+            # Complete
+            # --------------------------------------
 
             echo "======================================"
             echo "Deploy complete!"
