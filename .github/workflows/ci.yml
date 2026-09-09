@@ -87,7 +87,6 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-
           command_timeout: 10m
 
           script: |
@@ -151,7 +150,7 @@ jobs:
             sudo rm -f /etc/nginx/sites-enabled/default
 
             # --------------------------------------
-            # Nginx config test
+            # Test nginx configuration
             # --------------------------------------
 
             echo "Testing nginx configuration..."
@@ -175,14 +174,12 @@ jobs:
             sudo systemctl restart quiz-game
 
             # --------------------------------------
-            # Check application service
+            # Check systemd service
             # --------------------------------------
 
             echo "Checking quiz-game service..."
 
-            if sudo systemctl is-active --quiet quiz-game; then
-              echo "quiz-game service is running."
-            else
+            if ! sudo systemctl is-active --quiet quiz-game; then
               echo "ERROR: quiz-game service failed to start."
               echo ""
               echo "Service status:"
@@ -193,16 +190,36 @@ jobs:
               exit 1
             fi
 
+            echo "quiz-game service is active."
+
             # --------------------------------------
-            # Check local application
+            # Wait for application
             # --------------------------------------
 
-            echo "Checking application on port 8080..."
+            echo "Waiting for application on port 8080..."
 
-            if curl -fsS http://127.0.0.1:8080/ > /dev/null; then
-              echo "Application is responding."
-            else
-              echo "ERROR: Application is not responding."
+            APP_READY=false
+
+            for i in {1..30}; do
+              if curl -fsS http://127.0.0.1:8080/ > /dev/null 2>&1; then
+                APP_READY=true
+                echo "Application is responding."
+                break
+              fi
+
+              echo "Application is not ready yet... attempt $i/30"
+              sleep 1
+            done
+
+            # --------------------------------------
+            # Application failed to start
+            # --------------------------------------
+
+            if [ "$APP_READY" != "true" ]; then
+              echo "ERROR: Application did not become ready within 30 seconds."
+              echo ""
+              echo "Service status:"
+              sudo systemctl status quiz-game --no-pager || true
               echo ""
               echo "Application logs:"
               sudo journalctl -u quiz-game -n 100 --no-pager || true
