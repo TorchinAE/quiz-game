@@ -48,8 +48,10 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             git config --global --add safe.directory /home/mi/quiz-game
+            ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
             cd /home/mi/quiz-game
             git pull origin quiz-game
+            sudo apt-get install -y python3.12-venv 2>/dev/null || true
             python3 -m venv venv
             source venv/bin/activate
             pip install -r requirements.txt
