@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Квиз-Игра — Админка{% endblock %}
+{% block content %}
+<h1>Админка</h1>
+
+<div class="card" id="login-section">
+    <h2>Вход администратора</h2>
+    <div id="login-error" class="error" style="display:none"></div>
+    <input type="text" id="admin-user" placeholder="Логин" value="k2k1">
+    <input type="password" id="admin-pass" placeholder="Пароль">
+    <button class="btn btn-primary btn-block" onclick="adminLogin()">Войти</button>
+</div>
+
+<div id="admin-panel" style="display:none">
+    <div class="admin-header">
+        <h2>Управление контентом</h2>
+        <button class="btn btn-secondary btn-sm" onclick="logout()">Выйти</button>
+    </div>
+
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+            <h3 style="color:#e94560">Темы</h3>
+            <button class="btn btn-primary btn-sm" onclick="showTopicModal()">+ Тема</button>
+        </div>
+        <div id="topics-list"></div>
+    </div>
+
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+            <h3 style="color:#e94560">Вопросы</h3>
+            <div style="display:flex;gap:10px">
+                <select id="filter-topic" onchange="loadQuestions()" style="width:auto">
+                    <option value="">Все темы</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="showQuestionModal()">+ Вопрос</button>
+            </div>
+        </div>
+        <div id="questions-list"></div>
+    </div>
+</div>
+
+<!-- Topic Modal -->
+<div class="modal-overlay" id="topic-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+        <h3 id="topic-modal-title">Новая тема</h3>
+        <input type="hidden" id="topic-id">
+        <div class="form-group">
+            <label>Название</label>
+            <input type="text" id="topic-name">
+        </div>
+        <div class="form-group">
+            <label>Описание</label>
+            <input type="text" id="topic-desc">
+        </div>
+        <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" onclick="saveTopic()">Сохранить</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('topic-modal').style.display='none'">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<!-- Question Modal -->
+<div class="modal-overlay" id="question-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+        <h3 id="question-modal-title">Новый вопрос</h3>
+        <input type="hidden" id="q-id">
+        <div class="form-group">
+            <label>Тема</label>
+            <select id="q-topic"></select>
+        </div>
+        <div class="form-group">
+            <label>Текст вопроса</label>
+            <input type="text" id="q-text">
+        </div>
+        <div class="form-group">
+            <label>URL картинки (необязательно)</label>
+            <input type="text" id="q-image">
+        </div>
+        <div class="form-group">
+            <label>Вариант A</label>
+            <input type="text" id="q-opt-a">
+        </div>
+        <div class="form-group">
+            <label>Вариант B</label>
+            <input type="text" id="q-opt-b">
+        </div>
+        <div class="form-group">
+            <label>Вариант C</label>
+            <input type="text" id="q-opt-c">
+        </div>
+        <div class="form-group">
+            <label>Вариант D</label>
+            <input type="text" id="q-opt-d">
+        </div>
+        <div class="form-group">
+            <label>Правильный ответ</label>
+            <select id="q-correct">
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Пояснение</label>
+            <input type="text" id="q-explanation">
+        </div>
+        <div class="form-group">
+            <label>Сложность (1-3)</label>
+            <select id="q-difficulty">
+                <option value="1">1 — Лёгкий</option>
+                <option value="2">2 — Средний</option>
+                <option value="3">3 — Сложный</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" onclick="saveQuestion()">Сохранить</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('question-modal').style.display='none'">Отмена</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let adminToken = localStorage.getItem('admin_token');
+if (adminToken) showPanel();
+
+async function adminLogin() {
+    const username = document.getElementById('admin-user').value;
+    const password = document.getElementById('admin-pass').value;
+    try {
+        const res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, password})
+        });
+        const data = await res.json();
+        if (!res.ok) return showError('login-error', data.detail);
+        adminToken = data.token;
+        localStorage.setItem('admin_token', adminToken);
+        showPanel();
+    } catch(e) { showError('login-error', 'Ошибка сети'); }
+}
+
+function logout() {
+    adminToken = null;
+    localStorage.removeItem('admin_token');
+    document.getElementById('login-section').style.display = 'block';
+    document.getElementById('admin-panel').style.display = 'none';
+}
+
+function showPanel() {
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    loadTopics();
+    loadQuestions();
+}
+
+function headers() {
+    return {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken};
+}
+
+async function loadTopics() {
+    const res = await fetch('/api/admin/topics', {headers: headers()});
+    if (!res.ok) return;
+    const topics = await res.json();
+
+    document.getElementById('topics-list').innerHTML = `
+        <table class="admin-table">
+            <tr><th>ID</th><th>Название</th><th>Вопросов</th><th>Действия</th></tr>
+            ${topics.map(t => `
+                <tr>
+                    <td>${t.id}</td>
+                    <td>${t.name}</td>
+                    <td>${t.question_count}</td>
+                    <td class="admin-actions">
+                        <button class="btn btn-secondary btn-sm" onclick='editTopic(${JSON.stringify(t)})'>✏️</button>
+                        <button class="btn btn-sm" style="background:#e94560" onclick="deleteTopic(${t.id})">🗑️</button>
+                    </td>
+                </tr>
+            `).join('')}
+        </table>
+    `;
+
+    // Update filter dropdowns
+    const opts = topics.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    document.getElementById('filter-topic').innerHTML = '<option value="">Все темы</option>' + opts;
+    document.getElementById('q-topic').innerHTML = opts;
+}
+
+async function loadQuestions() {
+    const topicId = document.getElementById('filter-topic').value;
+    const url = topicId ? `/api/admin/questions?topic_id=${topicId}` : '/api/admin/questions';
+    const res = await fetch(url, {headers: headers()});
+    if (!res.ok) return;
+    const questions = await res.json();
+
+    document.getElementById('questions-list').innerHTML = `
+        <table class="admin-table">
+            <tr><th>ID</th><th>Вопрос</th><th>Правильный</th><th>Сложн.</th><th>Действия</th></tr>
+            ${questions.map(q => `
+                <tr>
+                    <td>${q.id}</td>
+                    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.text}</td>
+                    <td>${q.correct_option}</td>
+                    <td>${q.difficulty}</td>
+                    <td class="admin-actions">
+                        <button class="btn btn-secondary btn-sm" onclick='editQuestion(${JSON.stringify(q)})'>✏️</button>
+                        <button class="btn btn-sm" style="background:#e94560" onclick="deleteQuestion(${q.id})">🗑️</button>
+                    </td>
+                </tr>
+            `).join('')}
+        </table>
+    `;
+}
+
+function showTopicModal(topic) {
+    document.getElementById('topic-modal').style.display = 'flex';
+    document.getElementById('topic-modal-title').textContent = topic ? 'Редактировать тему' : 'Новая тема';
+    document.getElementById('topic-id').value = topic ? topic.id : '';
+    document.getElementById('topic-name').value = topic ? topic.name : '';
+    document.getElementById('topic-desc').value = topic ? topic.description : '';
+}
+
+function editTopic(t) { showTopicModal(t); }
+
+async function saveTopic() {
+    const id = document.getElementById('topic-id').value;
+    const body = {
+        name: document.getElementById('topic-name').value,
+        description: document.getElementById('topic-desc').value,
+    };
+    const url = id ? `/api/admin/topics/${id}` : '/api/admin/topics';
+    const method = id ? 'PUT' : 'POST';
+    await fetch(url, {method, headers: headers(), body: JSON.stringify(body)});
+    document.getElementById('topic-modal').style.display = 'none';
+    loadTopics();
+}
+
+async function deleteTopic(id) {
+    if (!confirm('Удалить тему и все её вопросы?')) return;
+    await fetch(`/api/admin/topics/${id}`, {method: 'DELETE', headers: headers()});
+    loadTopics();
+    loadQuestions();
+}
+
+function showQuestionModal(q) {
+    document.getElementById('question-modal').style.display = 'flex';
+    document.getElementById('question-modal-title').textContent = q ? 'Редактировать вопрос' : 'Новый вопрос';
+    document.getElementById('q-id').value = q ? q.id : '';
+    document.getElementById('q-topic').value = q ? q.topic_id : '';
+    document.getElementById('q-text').value = q ? q.text : '';
+    document.getElementById('q-image').value = q ? q.image_url : '';
+    document.getElementById('q-opt-a').value = q ? q.option_a : '';
+    document.getElementById('q-opt-b').value = q ? q.option_b : '';
+    document.getElementById('q-opt-c').value = q ? q.option_c : '';
+    document.getElementById('q-opt-d').value = q ? q.option_d : '';
+    document.getElementById('q-correct').value = q ? q.correct_option : 'A';
+    document.getElementById('q-explanation').value = q ? q.explanation : '';
+    document.getElementById('q-difficulty').value = q ? q.difficulty : 1;
+}
+
+function editQuestion(q) { showQuestionModal(q); }
+
+async function saveQuestion() {
+    const id = document.getElementById('q-id').value;
+    const body = {
+        topic_id: parseInt(document.getElementById('q-topic').value),
+        text: document.getElementById('q-text').value,
+        image_url: document.getElementById('q-image').value,
+        option_a: document.getElementById('q-opt-a').value,
+        option_b: document.getElementById('q-opt-b').value,
+        option_c: document.getElementById('q-opt-c').value,
+        option_d: document.getElementById('q-opt-d').value,
+        correct_option: document.getElementById('q-correct').value,
+        explanation: document.getElementById('q-explanation').value,
+        difficulty: parseInt(document.getElementById('q-difficulty').value),
+    };
+    const url = id ? `/api/admin/questions/${id}` : '/api/admin/questions';
+    const method = id ? 'PUT' : 'POST';
+    await fetch(url, {method, headers: headers(), body: JSON.stringify(body)});
+    document.getElementById('question-modal').style.display = 'none';
+    loadQuestions();
+}
+
+async function deleteQuestion(id) {
+    if (!confirm('Удалить вопрос?')) return;
+    await fetch(`/api/admin/questions/${id}`, {method: 'DELETE', headers: headers()});
+    loadQuestions();
+}
+
+function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 3000);
+}
+</script>
+{% endblock %}

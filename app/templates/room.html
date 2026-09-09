@@ -1,0 +1,549 @@
+{% extends "base.html" %}
+{% block title %}Комната — Квиз-Игра{% endblock %}
+{% block content %}
+<div id="game-area">
+    <!-- Top bar -->
+    <div id="top-bar">
+        <div class="room-top-info">
+            <a href="/app/static" class="btn btn-secondary btn-sm">← Лобби</a>
+            <span class="room-code-badge" id="room-code"></span>
+            <span id="role-badge" class="role-badge"></span>
+        </div>
+        <div class="room-scores-bar" id="scores-bar" style="display:none">
+            <div class="score-team">
+                <span class="score-label">Команда A</span>
+                <span class="score-value" id="score-a">0</span>
+            </div>
+            <span class="score-vs">vs</span>
+            <div class="score-team">
+                <span class="score-label">Команда B</span>
+                <span class="score-value" id="score-b">0</span>
+            </div>
+        </div>
+        <button class="btn btn-sm" style="background:#e94560" onclick="leaveRoom()">Покинуть</button>
+    </div>
+
+    <!-- Waiting lobby -->
+    <div class="card" id="waiting-section" style="display:none">
+        <h2 id="lobby-title">Комната</h2>
+        <div id="waiting-teams" class="teams-grid"></div>
+        <div id="topic-select-wrap" style="display:none;margin-top:15px">
+            <label style="font-weight:600">Выберите тему:</label>
+            <select id="topic-select" style="width:100%;margin-top:5px"></select>
+        </div>
+        <div style="text-align:center;margin-top:20px">
+            <button class="btn btn-success" id="start-btn" onclick="startGame()" style="display:none">Начать игру!</button>
+            <p id="waiting-msg" class="pulse" style="display:none">Ожидание игроков...</p>
+        </div>
+    </div>
+
+    <!-- Question card -->
+    <div class="card" id="question-card" style="display:none">
+        <div class="question-header">
+            <span class="question-counter" id="q-counter"></span>
+            <span class="difficulty" id="q-difficulty"></span>
+        </div>
+        <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
+        <div class="timer-text" id="timer-text">20</div>
+        <img class="question-image" id="q-image" style="display:none" referrerpolicy="no-referrer" crossorigin="anonymous">
+        <div class="question-text" id="q-text"></div>
+        <div class="options-grid" id="options"></div>
+    </div>
+
+    <!-- Reveal card -->
+    <div class="card" id="reveal-card" style="display:none">
+        <div class="reveal-box">
+            <div class="reveal-correct" id="reveal-correct"></div>
+            <div class="reveal-explanation" id="reveal-explanation"></div>
+            <div class="reveal-answers" id="reveal-answers"></div>
+        </div>
+    </div>
+
+    <!-- Finished card -->
+    <div class="card" id="finished-card" style="display:none">
+        <h2>Игра окончена!</h2>
+        <div id="final-results"></div>
+        <div style="text-align:center;margin-top:20px">
+            <a href="/app/static" class="btn btn-secondary">Выйти в лобби</a>
+        </div>
+    </div>
+
+    <!-- Room closed card -->
+    <div class="card" id="closed-card" style="display:none">
+        <h2>Комната закрыта</h2>
+        <p style="text-align:center;color:var(--text-secondary)">Комната была закрыта из-за неактивности (60 секунд без действий)</p>
+        <div style="text-align:center;margin-top:20px">
+            <a href="/app/static" class="btn btn-primary">Вернуться в лобби</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('quiz_token');
+const playerData = JSON.parse(localStorage.getItem('quiz_player') || 'null');
+const ROOM_CODE = '{{ room_code }}';
+let ws = null;
+let timerInterval = null;
+let currentQuestion = null;
+let answered = false;
+let revealTimeout = null;
+let isObserver = false;
+let nextQuestionInFlight = false;
+let nextRetryCount = 0;
+let showingReveal = false;
+let pendingNextQuestion = null;
+
+document.getElementById('room-code').textContent = ROOM_CODE;
+
+// --- WebSocket ---
+function connectWS() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${location.host}/ws/room/${ROOM_CODE}`);
+
+    ws.onopen = () => {
+        // Send auth
+        ws.send(JSON.stringify({type: 'auth', token: token || ''}));
+        loadState();
+    };
+
+    ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'question') onWSQuestion(msg.data);
+        if (msg.type === 'reveal') onWSReveal(msg.data);
+        if (msg.type === 'scores') onWSScores(msg.data);
+        if (msg.type === 'game_over') onWSGameOver(msg.data);
+        if (msg.type === 'room_update') onWSRoomUpdate(msg.data);
+        if (msg.type === 'room_closed') onWSRoomClosed(msg.data);
+    };
+
+    ws.onclose = () => { setTimeout(connectWS, 2000); };
+}
+connectWS();
+
+function onWSQuestion(q) {
+    if (showingReveal) {
+        // Buffer the question — show it after reveal timeout
+        pendingNextQuestion = q;
+        return;
+    }
+    clearTimeout(revealTimeout);
+    showQuestion(q);
+}
+
+function onWSReveal(data) {
+    showingReveal = true;
+    showReveal(data);
+    clearTimeout(revealTimeout);
+    revealTimeout = setTimeout(() => {
+        showingReveal = false;
+        if (pendingNextQuestion) {
+            const q = pendingNextQuestion;
+            pendingNextQuestion = null;
+            showQuestion(q);
+        } else {
+            nextQuestion();
+        }
+    }, 6000);
+}
+
+function onWSScores(data) {
+    document.getElementById('score-a').textContent = data.team_a_score || 0;
+    document.getElementById('score-b').textContent = data.team_b_score || 0;
+}
+
+function onWSGameOver(data) {
+    showGameOver(data);
+}
+
+function onWSRoomUpdate(data) {
+    // Refresh room state
+    loadState();
+}
+
+function onWSRoomClosed(data) {
+    showSection('closed-card');
+}
+
+// --- State ---
+async function loadState() {
+    try {
+        const res = await fetch(`/api/rooms/${ROOM_CODE}/state`);
+        if (!res.ok) { window.location.href = '/'; return; }
+        const state = await res.json();
+
+        // Determine if current user is observer
+        if (playerData) {
+            const allPlayers = [...(state.team_a?.members || []), ...(state.team_b?.members || [])];
+            const isPlayer = allPlayers.some(m => m.nickname === playerData.nickname);
+            isObserver = !isPlayer;
+        } else {
+            isObserver = true;
+        }
+
+        const roleBadge = document.getElementById('role-badge');
+        if (isObserver) {
+            roleBadge.textContent = '👁 Наблюдатель';
+            roleBadge.className = 'role-badge role-observer';
+        } else {
+            roleBadge.textContent = '🎮 Игрок';
+            roleBadge.className = 'role-badge role-player';
+        }
+
+        document.getElementById('scores-bar').style.display = 'flex';
+        document.getElementById('score-a').textContent = state.team_a?.score || 0;
+        document.getElementById('score-b').textContent = state.team_b?.score || 0;
+
+        // Show room name
+        const roomName = state.name || ROOM_CODE;
+        document.getElementById('lobby-title').textContent = roomName;
+        document.title = `${roomName} — Квиз-Игра`;
+
+        if (state.status === 'waiting') {
+            showSection('waiting-section');
+            renderWaitingRoom(state);
+        } else if (state.status === 'active') {
+            if (state.current_question) {
+                showQuestion(state.current_question);
+            }
+            if (state.correct_reveal) {
+                showReveal(state.correct_reveal);
+                showingReveal = true;
+                // Ensure auto-advance timer is set (loadState may have cleared it)
+                clearTimeout(revealTimeout);
+                revealTimeout = setTimeout(() => {
+                    showingReveal = false;
+                    if (pendingNextQuestion) {
+                        const q = pendingNextQuestion;
+                        pendingNextQuestion = null;
+                        showQuestion(q);
+                    } else {
+                        nextQuestion();
+                    }
+                }, 6000);
+            }
+        } else if (state.status === 'finished') {
+            showSection('finished-card');
+        }
+    } catch(e) {}
+}
+
+// --- Waiting room ---
+function renderWaitingRoom(state) {
+    const container = document.getElementById('waiting-teams');
+    const teamAMembers = state.team_a?.members || [];
+    const teamBMembers = state.team_b?.members || [];
+
+    container.innerHTML = `
+        <div class="card card-compact team-card">
+            <div class="team-name">Команда A</div>
+            <div class="team-members">${teamAMembers.map(m => m.nickname).join(', ') || 'Пусто'}</div>
+        </div>
+        <div class="card card-compact team-card">
+            <div class="team-name">Команда B</div>
+            <div class="team-members">${teamBMembers.map(m => m.nickname).join(', ') || 'Пусто'}</div>
+        </div>
+    `;
+
+    // Show start button if enough players
+    if (teamAMembers.length >= 1 && teamBMembers.length >= 1 && !isObserver) {
+        document.getElementById('start-btn').style.display = 'inline-block';
+        document.getElementById('waiting-msg').style.display = 'none';
+        document.getElementById('topic-select-wrap').style.display = 'block';
+        loadTopics();
+    } else if (!isObserver) {
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('waiting-msg').style.display = 'block';
+        document.getElementById('waiting-msg').textContent = 'Ожидание игроков в обе команды...';
+        document.getElementById('topic-select-wrap').style.display = 'none';
+    } else {
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('waiting-msg').style.display = 'block';
+        document.getElementById('waiting-msg').textContent = 'Ожидание начала игры...';
+        document.getElementById('topic-select-wrap').style.display = 'none';
+    }
+}
+
+async function loadTopics() {
+    const res = await fetch('/api/game/topics');
+    const topics = await res.json();
+    const sel = document.getElementById('topic-select');
+    sel.innerHTML = topics.map(t => `<option value="${t.id}">${t.name} (${t.question_count} вопросов)</option>`).join('');
+}
+
+async function startGame() {
+    const topicId = parseInt(document.getElementById('topic-select').value);
+    if (!topicId) return alert('Выберите тему');
+    try {
+        const res = await fetch(`/api/rooms/${ROOM_CODE}/start`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({topic_id: topicId})
+        });
+        const data = await res.json();
+        if (!res.ok) return alert(data.detail);
+        await nextQuestion();
+    } catch(e) { alert('Ошибка сети'); }
+}
+
+// --- Question ---
+function showQuestion(q) {
+    currentQuestion = q;
+    answered = false;
+    nextQuestionInFlight = false;
+    nextRetryCount = 0;
+    showingReveal = false;
+    pendingNextQuestion = null;
+    clearTimeout(revealTimeout);
+
+    showSection('question-card');
+    document.getElementById('scores-bar').style.display = 'flex';
+
+    document.getElementById('q-counter').textContent = `Вопрос ${q.index} из ${q.total}`;
+    const diffEl = document.getElementById('q-difficulty');
+    diffEl.textContent = `${q.difficulty} ${q.difficulty === 1 ? 'балл' : q.difficulty < 5 ? 'балла' : 'баллов'}`;
+    diffEl.className = 'difficulty diff-' + q.difficulty;
+
+    document.getElementById('q-text').textContent = q.text;
+
+    const imgEl = document.getElementById('q-image');
+    if (q.image_url) {
+        imgEl.src = q.image_url;
+        imgEl.style.display = 'block';
+        imgEl.onerror = () => { imgEl.style.display = 'none'; };
+    } else {
+        imgEl.style.display = 'none';
+    }
+
+    const options = [
+        {key: 'A', text: q.option_a},
+        {key: 'B', text: q.option_b},
+        {key: 'C', text: q.option_c},
+        {key: 'D', text: q.option_d},
+    ];
+
+    if (isObserver) {
+        // Observers see read-only options
+        document.getElementById('options').innerHTML = options.map(o => `
+            <div class="option-btn option-readonly">
+                <strong>${o.key}.</strong> ${o.text}
+            </div>
+        `).join('');
+    } else {
+        document.getElementById('options').innerHTML = options.map(o => `
+            <button class="option-btn" onclick="selectOption('${o.key}')" id="opt-${o.key}">
+                <strong>${o.key}.</strong> ${o.text}
+            </button>
+        `).join('');
+    }
+
+    startTimer(q.time_left || 20);
+}
+
+// --- Timer ---
+function startTimer(seconds) {
+    let timeLeft = seconds;
+    const fill = document.getElementById('timer-fill');
+    const text = document.getElementById('timer-text');
+    fill.style.width = '100%';
+    text.textContent = Math.ceil(timeLeft);
+
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        timeLeft -= 0.1;
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            timeLeft = 0;
+            onTimerExpired();
+        }
+        fill.style.width = (timeLeft / 20 * 100) + '%';
+        text.textContent = Math.ceil(timeLeft);
+    }, 100);
+}
+
+function disableOptions() {
+    document.querySelectorAll('.option-btn').forEach(b => {
+        if (b.tagName === 'BUTTON') b.disabled = true;
+    });
+}
+
+async function onTimerExpired() {
+    disableOptions();
+    try {
+        const res = await fetch(`/api/rooms/${ROOM_CODE}/state`);
+        const state = await res.json();
+        if (state.correct_reveal) {
+            showReveal(state.correct_reveal);
+            showingReveal = true;
+            clearTimeout(revealTimeout);
+            revealTimeout = setTimeout(() => {
+                showingReveal = false;
+                if (pendingNextQuestion) {
+                    const q = pendingNextQuestion;
+                    pendingNextQuestion = null;
+                    showQuestion(q);
+                } else {
+                    nextQuestion();
+                }
+            }, 6000);
+        } else if (state.current_question && state.current_question.id !== currentQuestion?.id) {
+            // Another client already advanced — show the new question
+            showQuestion(state.current_question);
+        }
+    } catch(e) {}
+}
+
+// --- Answer ---
+async function selectOption(key) {
+    if (answered || isObserver) return;
+    answered = true;
+
+    document.querySelectorAll('.option-btn').forEach(b => {
+        if (b.tagName === 'BUTTON') {
+            b.disabled = true;
+            if (b.id === 'opt-' + key) b.classList.add('selected');
+        }
+    });
+
+    try {
+        const res = await fetch(`/api/rooms/${ROOM_CODE}/answer`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token,
+            },
+            body: JSON.stringify({question_id: currentQuestion.id, option: key})
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            document.getElementById('opt-' + key).classList.remove('selected');
+            answered = false;
+            document.querySelectorAll('.option-btn').forEach(b => {
+                if (b.tagName === 'BUTTON') b.disabled = false;
+            });
+            alert(data.detail);
+        }
+    } catch(e) {
+        answered = false;
+        document.querySelectorAll('.option-btn').forEach(b => {
+            if (b.tagName === 'BUTTON') b.disabled = false;
+        });
+    }
+}
+
+// --- Reveal ---
+function showReveal(data) {
+    clearInterval(timerInterval);
+    clearTimeout(revealTimeout);
+    disableOptions();
+
+    document.querySelectorAll('.option-btn').forEach(b => {
+        const key = b.id?.replace('opt-', '') || '';
+        if (key === data.correct_option) b.classList.add('correct');
+        else if (b.classList.contains('selected')) b.classList.add('wrong');
+    });
+
+    document.getElementById('reveal-card').style.display = 'block';
+    document.getElementById('reveal-correct').textContent = `Правильный ответ: ${data.correct_option}`;
+    document.getElementById('reveal-explanation').textContent = data.explanation || '';
+
+    if (data.answers && data.answers.length > 0) {
+        document.getElementById('reveal-answers').innerHTML = data.answers.map(a => `
+            <div class="reveal-answer">
+                <span class="dot ${a.is_correct ? 'dot-correct' : 'dot-wrong'}"></span>
+                <span>Команда ${a.team} (${a.member_nickname}): ${a.selected_option} ${a.is_correct ? '✓' : '✗'}</span>
+            </div>
+        `).join('');
+    } else {
+        document.getElementById('reveal-answers').innerHTML = '<div class="reveal-answer">Никто не ответил</div>';
+    }
+
+    // Update scores
+    if (data.team_a_score !== undefined) document.getElementById('score-a').textContent = data.team_a_score;
+    if (data.team_b_score !== undefined) document.getElementById('score-b').textContent = data.team_b_score;
+}
+
+// --- Next Question ---
+const MAX_NEXT_RETRIES = 3;
+async function nextQuestion() {
+    if (nextQuestionInFlight) return;
+    if (nextRetryCount >= MAX_NEXT_RETRIES) return;
+    nextQuestionInFlight = true;
+    clearTimeout(revealTimeout);
+    try {
+        const res = await fetch(`/api/rooms/${ROOM_CODE}/next`, {
+            method: 'POST',
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        const data = await res.json();
+        if (res.ok) {
+            nextRetryCount = 0;
+            if (data.status === 'finished') {
+                showGameOver(null);
+            }
+        } else {
+            // Rejected (race condition with another client) — reset and retry
+            nextQuestionInFlight = false;
+            nextRetryCount++;
+            setTimeout(() => { nextQuestion(); }, 3000);
+        }
+    } catch(e) {
+        nextQuestionInFlight = false;
+        nextRetryCount++;
+        setTimeout(() => { nextQuestion(); }, 3000);
+    }
+}
+
+// --- Game Over ---
+function showGameOver(data) {
+    clearInterval(timerInterval);
+    clearTimeout(revealTimeout);
+    showSection('finished-card');
+
+    if (data && data.data) data = data.data;
+
+    const scoreA = data?.team_a_score ?? document.getElementById('score-a').textContent;
+    const scoreB = data?.team_b_score ?? document.getElementById('score-b').textContent;
+    const membersA = data?.team_a_members || [];
+    const membersB = data?.team_b_members || [];
+
+    const winner = parseInt(scoreA) > parseInt(scoreB) ? 'A' : parseInt(scoreB) > parseInt(scoreA) ? 'B' : null;
+
+    document.getElementById('final-results').innerHTML = `
+        <table class="results-table">
+            <tr><th>Команда</th><th>Игроки</th><th>Очки</th></tr>
+            <tr class="${winner === 'A' ? 'winner' : ''}">
+                <td>Команда A ${winner === 'A' ? '🏆' : ''}</td>
+                <td>${membersA.map(m => m.nickname).join(', ') || '—'}</td>
+                <td>${scoreA}</td>
+            </tr>
+            <tr class="${winner === 'B' ? 'winner' : ''}">
+                <td>Команда B ${winner === 'B' ? '🏆' : ''}</td>
+                <td>${membersB.map(m => m.nickname).join(', ') || '—'}</td>
+                <td>${scoreB}</td>
+            </tr>
+        </table>
+    `;
+}
+
+// --- Leave ---
+async function leaveRoom() {
+    try {
+        await fetch(`/api/rooms/${ROOM_CODE}/leave`, {
+            method: 'POST',
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+    } catch(e) {}
+    window.location.href = '/';
+}
+
+// --- Section helper ---
+function showSection(id) {
+    ['waiting-section', 'question-card', 'reveal-card', 'finished-card', 'closed-card'].forEach(s => {
+        const el = document.getElementById(s);
+        if (el) el.style.display = s === id ? 'block' : 'none';
+    });
+}
+</script>
+{% endblock %}

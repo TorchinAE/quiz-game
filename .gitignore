@@ -1,0 +1,12 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.coverage
+coverage.xml
+.pytest_cache/
+*.log
+.mimocode/
+.idea/
+data/*.db
+data/test_quiz.db

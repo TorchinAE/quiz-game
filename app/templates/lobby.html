@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Квиз-Игра — Лобби{% endblock %}
+{% block content %}
+<div class="lobby-layout">
+    <!-- Main area -->
+    <div class="lobby-main">
+        <div class="lobby-header">
+            <h1>Квиз-Игра</h1>
+            <div class="lobby-auth-bar" id="auth-bar"></div>
+        </div>
+
+        <!-- Auth modal (hidden by default) -->
+        <div class="card auth-card" id="auth-section" style="display:none">
+            <h2>Вход</h2>
+            <div id="auth-error" class="error" style="display:none"></div>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="showAuthTab('guest')">Гость</button>
+                <button class="auth-tab" onclick="showAuthTab('login')">Войти</button>
+                <button class="auth-tab" onclick="showAuthTab('register')">Регистрация</button>
+            </div>
+
+            <!-- Guest tab -->
+            <div id="tab-guest" class="auth-tab-content">
+                <input type="text" id="guest-nickname" placeholder="Ваш никнейм" maxlength="100">
+                <button class="btn btn-primary btn-block" onclick="guestLogin()">Войти как гость</button>
+            </div>
+
+            <!-- Login tab -->
+            <div id="tab-login" class="auth-tab-content" style="display:none">
+                <input type="email" id="login-email" placeholder="Email">
+                <input type="password" id="login-password" placeholder="Пароль">
+                <button class="btn btn-primary btn-block" onclick="playerLogin()">Войти</button>
+            </div>
+
+            <!-- Register tab -->
+            <div id="tab-register" class="auth-tab-content" style="display:none">
+                <input type="text" id="reg-nickname" placeholder="Никнейм" maxlength="100">
+                <input type="email" id="reg-email" placeholder="Email">
+                <input type="password" id="reg-password" placeholder="Пароль (мин. 4 символа)">
+                <button class="btn btn-success btn-block" onclick="playerRegister()">Зарегистрироваться</button>
+            </div>
+        </div>
+
+        <!-- Create room -->
+        <div id="create-room-section" style="display:none">
+            <div class="card" style="margin-bottom:20px">
+                <div style="display:flex;gap:10px;align-items:center">
+                    <input type="text" id="new-room-name" placeholder="Название комнаты (необязательно)" maxlength="200" style="flex:1">
+                    <button class="btn btn-success" onclick="createRoom()">+ Создать</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Room list -->
+        <h2 id="rooms-title" style="display:none">Комнаты</h2>
+        <div id="rooms-list"></div>
+        <div id="no-rooms" class="card" style="display:none;text-align:center;color:var(--text-secondary)">
+            Нет активных комнат. Создайте первую!
+        </div>
+    </div>
+
+    <!-- Sidebar: Leaderboard -->
+    <div class="lobby-sidebar">
+        <div class="sidebar-section">
+            <h3>🏆 Топ-5 игроков</h3>
+            <div id="leaderboard-list">
+                <div class="leaderboard-empty">Пока нет зарегистрированных игроков</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('quiz_token');
+const playerData = JSON.parse(localStorage.getItem('quiz_player') || 'null');
+
+// --- Init ---
+updateAuthBar();
+if (token && playerData) {
+    document.getElementById('create-room-section').style.display = 'block';
+}
+document.getElementById('rooms-title').style.display = 'block';
+loadRooms();
+loadLeaderboard();
+setInterval(loadRooms, 3000);
+setInterval(loadLeaderboard, 10000);
+
+// --- Auth bar ---
+function updateAuthBar() {
+    const bar = document.getElementById('auth-bar');
+    if (token && playerData) {
+        const label = playerData.is_registered
+            ? `${playerData.nickname} (зарегистрирован)`
+            : `${playerData.nickname} (гость)`;
+        bar.innerHTML = `<span class="player-label">${label}</span> <button class="btn btn-secondary btn-sm" onclick="logout()">Выйти</button>`;
+    } else {
+        bar.innerHTML = `<button class="btn btn-primary btn-sm" onclick="showAuth()">Войти</button>`;
+    }
+}
+
+function showAuth() {
+    document.getElementById('auth-section').style.display = 'block';
+}
+
+function showAuthTab(tab) {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.auth-tab-content').forEach(c => c.style.display = 'none');
+    event.target.classList.add('active');
+    document.getElementById('tab-' + tab).style.display = 'block';
+}
+
+// --- Auth actions ---
+async function guestLogin() {
+    const nickname = document.getElementById('guest-nickname').value.trim();
+    if (!nickname) return showError('Введите никнейм');
+    try {
+        const res = await fetch('/api/auth/guest', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nickname})
+        });
+        const data = await res.json();
+        if (!res.ok) return showError(data.detail);
+        localStorage.setItem('quiz_token', data.token);
+        localStorage.setItem('quiz_player', JSON.stringify(data.player));
+        location.reload();
+    } catch(e) { showError('Ошибка сети'); }
+}
+
+async function playerLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!email || !password) return showError('Заполните все поля');
+    try {
+        const res = await fetch('/api/auth/player/login', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password})
+        });
+        const data = await res.json();
+        if (!res.ok) return showError(data.detail);
+        localStorage.setItem('quiz_token', data.token);
+        localStorage.setItem('quiz_player', JSON.stringify({...data.player, is_registered: true}));
+        location.reload();
+    } catch(e) { showError('Ошибка сети'); }
+}
+
+async function playerRegister() {
+    const nickname = document.getElementById('reg-nickname').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    if (!nickname || !email || !password) return showError('Заполните все поля');
+    try {
+        const res = await fetch('/api/auth/player/register', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nickname, email, password})
+        });
+        const data = await res.json();
+        if (!res.ok) return showError(data.detail);
+        localStorage.setItem('quiz_token', data.token);
+        localStorage.setItem('quiz_player', JSON.stringify({...data.player, is_registered: true}));
+        location.reload();
+    } catch(e) { showError('Ошибка сети'); }
+}
+
+function logout() {
+    localStorage.removeItem('quiz_token');
+    localStorage.removeItem('quiz_player');
+    localStorage.removeItem('quiz_team');
+    location.reload();
+}
+
+// --- Rooms ---
+async function loadRooms() {
+    try {
+        const res = await fetch('/api/rooms');
+        const rooms = await res.json();
+        const container = document.getElementById('rooms-list');
+        const noRooms = document.getElementById('no-rooms');
+
+        if (rooms.length === 0) {
+            container.innerHTML = '';
+            noRooms.style.display = 'block';
+            return;
+        }
+        noRooms.style.display = 'none';
+
+        container.innerHTML = rooms.map(r => {
+            const statusText = r.status === 'waiting' ? 'Ожидание игроков' : 'Игра идёт';
+            const statusClass = r.status === 'waiting' ? 'status-waiting' : 'status-active';
+            return `
+                <div class="card room-card">
+                    <div class="room-header">
+                        <span class="room-name">${r.name || r.code}</span>
+                        <span class="room-code">${r.code}</span>
+                        <span class="room-status ${statusClass}">${statusText}</span>
+                        ${r.topic ? `<span class="room-topic">${r.topic}</span>` : ''}
+                    </div>
+                    <div class="room-teams">
+                        <div class="room-team">
+                            <strong>Команда A</strong>
+                            <span>${r.team_a.map(p => p.nickname).join(', ') || '—'}</span>
+                            ${r.team_a.length > 0 ? `<span class="team-score-small">${r.team_a.reduce((s, p) => s + p.score, 0)}</span>` : ''}
+                        </div>
+                        <div class="room-team">
+                            <strong>Команда B</strong>
+                            <span>${r.team_b.map(p => p.nickname).join(', ') || '—'}</span>
+                            ${r.team_b.length > 0 ? `<span class="team-score-small">${r.team_b.reduce((s, p) => s + p.score, 0)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="room-footer">
+                        <span class="observers-count">👁 ${r.observers_count} наблюдателей</span>
+                        <div class="room-actions">
+                            ${r.status === 'waiting' ? `
+                                <button class="btn btn-primary btn-sm" onclick="joinRoom('${r.code}', 'A', 'player')">Играть A</button>
+                                <button class="btn btn-primary btn-sm" onclick="joinRoom('${r.code}', 'B', 'player')">Играть B</button>
+                            ` : ''}
+                            <button class="btn btn-secondary btn-sm" onclick="joinRoom('${r.code}', 'A', 'observer')">Наблюдать</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch(e) {}
+}
+
+async function createRoom() {
+    if (!token) { showAuth(); return; }
+    const name = document.getElementById('new-room-name').value.trim();
+    try {
+        const res = await fetch('/api/rooms', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({name})
+        });
+        const data = await res.json();
+        if (!res.ok) return showError(data.detail);
+        window.location.href = '/room/' + data.code;
+    } catch(e) { showError('Ошибка сети'); }
+}
+
+async function joinRoom(code, team, role) {
+    if (!token) { showAuth(); return; }
+    try {
+        const res = await fetch(`/api/rooms/${code}/join`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({team, role})
+        });
+        const data = await res.json();
+        if (!res.ok) return showError(data.detail);
+        window.location.href = '/room/' + code;
+    } catch(e) { showError('Ошибка сети'); }
+}
+
+// --- Leaderboard ---
+async function loadLeaderboard() {
+    try {
+        const res = await fetch('/api/leaderboard');
+        const players = await res.json();
+        const container = document.getElementById('leaderboard-list');
+        if (players.length === 0) {
+            container.innerHTML = '<div class="leaderboard-empty">Пока нет зарегистрированных игроков</div>';
+            return;
+        }
+        container.innerHTML = players.map((p, i) => `
+            <div class="leaderboard-item">
+                <span class="lb-rank">${i + 1}</span>
+                <span class="lb-name">${p.nickname}</span>
+                <span class="lb-score">${p.total_score}</span>
+            </div>
+        `).join('');
+    } catch(e) {}
+}
+
+// --- Error ---
+function showError(msg) {
+    const el = document.getElementById('auth-error');
+    if (el) {
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    } else {
+        alert(msg);
+    }
+}
+</script>
+{% endblock %}

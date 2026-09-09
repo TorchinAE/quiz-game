@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Квиз-Игра — Результаты{% endblock %}
+{% block content %}
+<h1>Результаты</h1>
+<div class="card">
+    <h2>Финальная таблица</h2>
+    <div id="results"></div>
+    <div style="text-align:center;margin-top:20px">
+        <a href="/app/static" class="btn btn-primary">На главную</a>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function load() {
+    const res = await fetch('/api/game/results');
+    const data = await res.json();
+    const sorted = [...data.teams].sort((a, b) => b.score - a.score);
+    document.getElementById('results').innerHTML = `
+        <table class="results-table">
+            <tr><th>Место</th><th>Команда</th><th>Очки</th></tr>
+            ${sorted.map((t, i) => `
+                <tr class="${i === 0 ? 'winner' : ''}">
+                    <td>${i === 0 ? '🏆' : '🥈'} ${i + 1}</td>
+                    <td>${t.name}</td>
+                    <td>${t.score}</td>
+                </tr>
+            `).join('')}
+        </table>
+    `;
+}
+load();
+</script>
+{% endblock %}
