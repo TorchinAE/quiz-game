@@ -130,7 +130,7 @@ async function adminLogin() {
     const username = document.getElementById('admin-user').value;
     const password = document.getElementById('admin-pass').value;
     try {
-        const res = await fetch('/api/admin/login', {
+        const res = await fetch(BASE + '/api/admin/login', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({username, password})
@@ -162,7 +162,7 @@ function headers() {
 }
 
 async function loadTopics() {
-    const res = await fetch('/api/admin/topics', {headers: headers()});
+    const res = await fetch(BASE + '/api/admin/topics', {headers: headers()});
     if (!res.ok) return;
     const topics = await res.json();
 
@@ -191,7 +191,7 @@ async function loadTopics() {
 
 async function loadQuestions() {
     const topicId = document.getElementById('filter-topic').value;
-    const url = topicId ? `/api/admin/questions?topic_id=${topicId}` : '/api/admin/questions';
+    const url = topicId ? `${BASE}/api/admin/questions?topic_id=${topicId}` : BASE + '/api/admin/questions';
     const res = await fetch(url, {headers: headers()});
     if (!res.ok) return;
     const questions = await res.json();
@@ -231,7 +231,7 @@ async function saveTopic() {
         name: document.getElementById('topic-name').value,
         description: document.getElementById('topic-desc').value,
     };
-    const url = id ? `/api/admin/topics/${id}` : '/api/admin/topics';
+    const url = id ? `${BASE}/api/admin/topics/${id}` : BASE + '/api/admin/topics';
     const method = id ? 'PUT' : 'POST';
     await fetch(url, {method, headers: headers(), body: JSON.stringify(body)});
     document.getElementById('topic-modal').style.display = 'none';
@@ -240,7 +240,7 @@ async function saveTopic() {
 
 async function deleteTopic(id) {
     if (!confirm('Удалить тему и все её вопросы?')) return;
-    await fetch(`/api/admin/topics/${id}`, {method: 'DELETE', headers: headers()});
+    await fetch(`${BASE}/api/admin/topics/${id}`, {method: 'DELETE', headers: headers()});
     loadTopics();
     loadQuestions();
 }
@@ -277,7 +277,7 @@ async function saveQuestion() {
         explanation: document.getElementById('q-explanation').value,
         difficulty: parseInt(document.getElementById('q-difficulty').value),
     };
-    const url = id ? `/api/admin/questions/${id}` : '/api/admin/questions';
+    const url = id ? `${BASE}/api/admin/questions/${id}` : BASE + '/api/admin/questions';
     const method = id ? 'PUT' : 'POST';
     await fetch(url, {method, headers: headers(), body: JSON.stringify(body)});
     document.getElementById('question-modal').style.display = 'none';
@@ -286,7 +286,7 @@ async function saveQuestion() {
 
 async function deleteQuestion(id) {
     if (!confirm('Удалить вопрос?')) return;
-    await fetch(`/api/admin/questions/${id}`, {method: 'DELETE', headers: headers()});
+    await fetch(`${BASE}/api/admin/questions/${id}`, {method: 'DELETE', headers: headers()});
     loadQuestions();
 }
 

@@ -117,7 +117,7 @@ async function guestLogin() {
     const nickname = document.getElementById('guest-nickname').value.trim();
     if (!nickname) return showError('Введите никнейм');
     try {
-        const res = await fetch('/api/auth/guest', {
+        const res = await fetch(BASE + '/api/auth/guest', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({nickname})
         });
@@ -134,7 +134,7 @@ async function playerLogin() {
     const password = document.getElementById('login-password').value;
     if (!email || !password) return showError('Заполните все поля');
     try {
-        const res = await fetch('/api/auth/player/login', {
+        const res = await fetch(BASE + '/api/auth/player/login', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({email, password})
         });
@@ -152,7 +152,7 @@ async function playerRegister() {
     const password = document.getElementById('reg-password').value;
     if (!nickname || !email || !password) return showError('Заполните все поля');
     try {
-        const res = await fetch('/api/auth/player/register', {
+        const res = await fetch(BASE + '/api/auth/player/register', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({nickname, email, password})
         });
@@ -174,7 +174,7 @@ function logout() {
 // --- Rooms ---
 async function loadRooms() {
     try {
-        const res = await fetch('/api/rooms');
+        const res = await fetch(BASE + '/api/rooms');
         const rooms = await res.json();
         const container = document.getElementById('rooms-list');
         const noRooms = document.getElementById('no-rooms');
@@ -229,35 +229,35 @@ async function createRoom() {
     if (!token) { showAuth(); return; }
     const name = document.getElementById('new-room-name').value.trim();
     try {
-        const res = await fetch('/api/rooms', {
+        const res = await fetch(BASE + '/api/rooms', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({name})
         });
         const data = await res.json();
         if (!res.ok) return showError(data.detail);
-        window.location.href = '/room/' + data.code;
+        window.location.href = BASE + '/room/' + data.code;
     } catch(e) { showError('Ошибка сети'); }
 }
 
 async function joinRoom(code, team, role) {
     if (!token) { showAuth(); return; }
     try {
-        const res = await fetch(`/api/rooms/${code}/join`, {
+        const res = await fetch(`${BASE}/api/rooms/${code}/join`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({team, role})
         });
         const data = await res.json();
         if (!res.ok) return showError(data.detail);
-        window.location.href = '/room/' + code;
+        window.location.href = BASE + '/room/' + code;
     } catch(e) { showError('Ошибка сети'); }
 }
 
 // --- Leaderboard ---
 async function loadLeaderboard() {
     try {
-        const res = await fetch('/api/leaderboard');
+        const res = await fetch(BASE + '/api/leaderboard');
         const players = await res.json();
         const container = document.getElementById('leaderboard-list');
         if (players.length === 0) {

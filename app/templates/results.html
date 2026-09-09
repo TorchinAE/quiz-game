@@ -6,14 +6,14 @@
     <h2>Финальная таблица</h2>
     <div id="results"></div>
     <div style="text-align:center;margin-top:20px">
-        <a href="/app/static" class="btn btn-primary">На главную</a>
+        <a href="/quiz/" class="btn btn-primary">На главную</a>
     </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
 async function load() {
-    const res = await fetch('/api/game/results');
+    const res = await fetch(BASE + '/api/game/results');
     const data = await res.json();
     const sorted = [...data.teams].sort((a, b) => b.score - a.score);
     document.getElementById('results').innerHTML = `

@@ -5,7 +5,7 @@
     <!-- Top bar -->
     <div id="top-bar">
         <div class="room-top-info">
-            <a href="/app/static" class="btn btn-secondary btn-sm">← Лобби</a>
+            <a href="/quiz/" class="btn btn-secondary btn-sm">← Лобби</a>
             <span class="room-code-badge" id="room-code"></span>
             <span id="role-badge" class="role-badge"></span>
         </div>
@@ -64,7 +64,7 @@
         <h2>Игра окончена!</h2>
         <div id="final-results"></div>
         <div style="text-align:center;margin-top:20px">
-            <a href="/app/static" class="btn btn-secondary">Выйти в лобби</a>
+            <a href="/quiz/" class="btn btn-secondary">Выйти в лобби</a>
         </div>
     </div>
 
@@ -73,7 +73,7 @@
         <h2>Комната закрыта</h2>
         <p style="text-align:center;color:var(--text-secondary)">Комната была закрыта из-за неактивности (60 секунд без действий)</p>
         <div style="text-align:center;margin-top:20px">
-            <a href="/app/static" class="btn btn-primary">Вернуться в лобби</a>
+            <a href="/quiz/" class="btn btn-primary">Вернуться в лобби</a>
         </div>
     </div>
 </div>
@@ -100,7 +100,7 @@ document.getElementById('room-code').textContent = ROOM_CODE;
 // --- WebSocket ---
 function connectWS() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${location.host}/ws/room/${ROOM_CODE}`);
+    ws = new WebSocket(`${protocol}//${location.host}${BASE}/ws/room/${ROOM_CODE}`);
 
     ws.onopen = () => {
         // Send auth
@@ -169,8 +169,8 @@ function onWSRoomClosed(data) {
 // --- State ---
 async function loadState() {
     try {
-        const res = await fetch(`/api/rooms/${ROOM_CODE}/state`);
-        if (!res.ok) { window.location.href = '/'; return; }
+        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/state`);
+        if (!res.ok) { window.location.href = BASE + '/'; return; }
         const state = await res.json();
 
         // Determine if current user is observer
@@ -266,7 +266,7 @@ function renderWaitingRoom(state) {
 }
 
 async function loadTopics() {
-    const res = await fetch('/api/game/topics');
+    const res = await fetch(BASE + '/api/game/topics');
     const topics = await res.json();
     const sel = document.getElementById('topic-select');
     sel.innerHTML = topics.map(t => `<option value="${t.id}">${t.name} (${t.question_count} вопросов)</option>`).join('');
@@ -276,7 +276,7 @@ async function startGame() {
     const topicId = parseInt(document.getElementById('topic-select').value);
     if (!topicId) return alert('Выберите тему');
     try {
-        const res = await fetch(`/api/rooms/${ROOM_CODE}/start`, {
+        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/start`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({topic_id: topicId})
@@ -371,7 +371,7 @@ function disableOptions() {
 async function onTimerExpired() {
     disableOptions();
     try {
-        const res = await fetch(`/api/rooms/${ROOM_CODE}/state`);
+        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/state`);
         const state = await res.json();
         if (state.correct_reveal) {
             showReveal(state.correct_reveal);
@@ -407,7 +407,7 @@ async function selectOption(key) {
     });
 
     try {
-        const res = await fetch(`/api/rooms/${ROOM_CODE}/answer`, {
+        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/answer`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -472,7 +472,7 @@ async function nextQuestion() {
     nextQuestionInFlight = true;
     clearTimeout(revealTimeout);
     try {
-        const res = await fetch(`/api/rooms/${ROOM_CODE}/next`, {
+        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/next`, {
             method: 'POST',
             headers: {'Authorization': 'Bearer ' + token}
         });
@@ -530,12 +530,12 @@ function showGameOver(data) {
 // --- Leave ---
 async function leaveRoom() {
     try {
-        await fetch(`/api/rooms/${ROOM_CODE}/leave`, {
+        await fetch(`${BASE}/api/rooms/${ROOM_CODE}/leave`, {
             method: 'POST',
             headers: {'Authorization': 'Bearer ' + token}
         });
     } catch(e) {}
-    window.location.href = '/';
+    window.location.href = BASE + '/';
 }
 
 // --- Section helper ---
