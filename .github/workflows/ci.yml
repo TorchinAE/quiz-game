@@ -57,6 +57,7 @@ jobs:
             python3 -m venv venv 2>/dev/null || true
             source venv/bin/activate
             pip install -r requirements.txt
+            sudo apt-get install -y nginx 2>/dev/null || true
             sudo cp nginx/quiz-game.conf /etc/nginx/sites-available/quiz-game.conf
             sudo ln -sf /etc/nginx/sites-available/quiz-game.conf /etc/nginx/sites-enabled/quiz-game.conf
             sudo nginx -t && sudo systemctl reload nginx
