@@ -46,13 +46,14 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 5m
           script: |
+            set -e
             git config --global --add safe.directory /home/mi/quiz-game
-            ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
             cd /home/mi/quiz-game
+            git remote set-url origin https://github.com/TorchinAE/quiz-game.git
             git pull origin quiz-game
-            sudo apt-get install -y python3.12-venv 2>/dev/null || true
-            python3 -m venv venv
+            python3 -m venv venv 2>/dev/null || true
             source venv/bin/activate
             pip install -r requirements.txt
             pkill -f "uvicorn.*app.main:app" || true
