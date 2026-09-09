@@ -1,5 +1,6 @@
 import pytest
 from sqlalchemy import select
+from unittest.mock import patch
 
 from app.database import async_session
 from app.models import Question, Topic
@@ -206,8 +207,9 @@ async def test_join_finished_room(client):
 
     # Finish game by advancing all questions + 1
     headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
-    for _ in range(13):
-        await client.post(f"/api/rooms/{code}/next", headers=headers_a)
+    with patch("app.routers.rooms.ANSWER_TIME_SECONDS", 0):
+        for _ in range(13):
+            await client.post(f"/api/rooms/{code}/next", headers=headers_a)
 
     reg_c = await register_player(client, "ФинВ")
     headers_c = {"Authorization": f"Bearer {reg_c['token']}"}
@@ -545,8 +547,9 @@ async def test_room_finish_game(client):
     headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
 
     # Advance through all 12 questions + 1 extra
-    for _ in range(13):
-        await client.post(f"/api/rooms/{code}/next", headers=headers_a)
+    with patch("app.routers.rooms.ANSWER_TIME_SECONDS", 0):
+        for _ in range(13):
+            await client.post(f"/api/rooms/{code}/next", headers=headers_a)
 
     res = await client.get(f"/api/rooms/{code}/state")
     assert res.json()["status"] == "finished"
