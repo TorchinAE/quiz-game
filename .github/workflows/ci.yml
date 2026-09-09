@@ -59,3 +59,5 @@ jobs:
             pip install -r requirements.txt
             pkill -f "uvicorn.*app.main:app" || true
             nohup python3 -u -c "import uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=8000)" > quiz-game.log 2>&1 &
+            disown
+            sleep 2
