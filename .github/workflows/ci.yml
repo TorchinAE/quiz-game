@@ -1,61 +1,238 @@
-deploy:
-  needs: [lint, test]
-  runs-on: ubuntu-latest
-  if: github.ref == 'refs/heads/quiz-game' && github.event_name == 'push'
+name: CI/CD
 
-  steps:
-    - uses: actions/checkout@v4
+on:
+  push:
+    branches: [quiz-game]
 
-    - name: Deploy via SSH
-      uses: appleboy/ssh-action@v1
-      with:
-        host: ${{ secrets.DEPLOY_HOST }}
-        username: ${{ secrets.DEPLOY_USER }}
-        key: ${{ secrets.DEPLOY_SSH_KEY }}
-        command_timeout: 10m
+  pull_request:
+    branches: [quiz-game]
 
-        script: |
-          set -e
 
-          git config --global --add safe.directory /home/mi/quiz-game
+jobs:
+  # =========================
+  # LINT
+  # =========================
+  lint:
+    runs-on: ubuntu-latest
 
-          cd /home/mi/quiz-game
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-          git remote set-url origin https://github.com/TorchinAE/quiz-game.git
-          git fetch origin quiz-game
-          git reset --hard origin/quiz-game
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-          python3 -m venv venv 2>/dev/null || true
-          source venv/bin/activate
+      - name: Install Ruff
+        run: pip install ruff
 
-          pip install -r requirements.txt
+      - name: Check formatting
+        run: ruff format --check .
 
-          sudo apt-get update -qq
-          sudo apt-get install -y nginx
+      - name: Run Ruff
+        run: ruff check .
 
-          sudo mkdir -p /etc/nginx/sites-available
-          sudo mkdir -p /etc/nginx/sites-enabled
 
-          sudo cp nginx/quiz-game.conf \
-            /etc/nginx/sites-available/quiz-game.conf
+  # =========================
+  # TEST
+  # =========================
+  test:
+    runs-on: ubuntu-latest
 
-          sudo ln -sf \
-            /etc/nginx/sites-available/quiz-game.conf \
-            /etc/nginx/sites-enabled/quiz-game.conf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-          sudo rm -f /etc/nginx/sites-enabled/default
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-          sudo nginx -t
-          sudo systemctl reload nginx
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-          # Останавливаем старый Uvicorn.
-          # [u] предотвращает совпадение pkill с самим собой.
-          pkill -f "[u]vicorn.*app.main:app" || true
+      - name: Run tests
+        run: |
+          pytest \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml
 
-          sleep 2
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
 
-          nohup python3 -u -c \
-            "import uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=8080)" \
-            >> quiz-game.log 2>&1 &
 
-          echo "Deploy complete"
+  # =========================
+  # DEPLOY
+  # =========================
+  deploy:
+    needs: [lint, test]
+
+    runs-on: ubuntu-latest
+
+    if: github.ref == 'refs/heads/quiz-game' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+          command_timeout: 10m
+
+          script: |
+            set -e
+
+            echo "======================================"
+            echo "Starting deployment"
+            echo "======================================"
+
+            # --------------------------------------
+            # Project directory
+            # --------------------------------------
+
+            cd /home/mi/quiz-game
+
+            echo "Updating repository..."
+
+            git config --global --add safe.directory /home/mi/quiz-game
+
+            git remote set-url origin https://github.com/TorchinAE/quiz-game.git
+
+            git fetch origin quiz-game
+
+            git reset --hard origin/quiz-game
+
+            # --------------------------------------
+            # Python virtual environment
+            # --------------------------------------
+
+            echo "Setting up Python environment..."
+
+            python3 -m venv venv 2>/dev/null || true
+
+            source venv/bin/activate
+
+            python -m pip install --upgrade pip
+
+            pip install -r requirements.txt
+
+            # --------------------------------------
+            # Nginx
+            # --------------------------------------
+
+            echo "Installing/configuring nginx..."
+
+            sudo apt-get update -qq
+
+            sudo apt-get install -y nginx
+
+            sudo mkdir -p /etc/nginx/sites-available
+            sudo mkdir -p /etc/nginx/sites-enabled
+
+            sudo cp \
+              nginx/quiz-game.conf \
+              /etc/nginx/sites-available/quiz-game.conf
+
+            sudo ln -sf \
+              /etc/nginx/sites-available/quiz-game.conf \
+              /etc/nginx/sites-enabled/quiz-game.conf
+
+            sudo rm -f /etc/nginx/sites-enabled/default
+
+            # --------------------------------------
+            # Test nginx configuration
+            # --------------------------------------
+
+            echo "Testing nginx configuration..."
+
+            sudo nginx -t
+
+            # --------------------------------------
+            # Reload nginx
+            # --------------------------------------
+
+            echo "Reloading nginx..."
+
+            sudo systemctl reload nginx
+
+            # --------------------------------------
+            # Stop old Uvicorn process
+            # --------------------------------------
+
+            echo "Stopping old Uvicorn process..."
+
+            pkill -f '[u]vicorn.*app.main:app' || true
+
+            sleep 2
+
+            # --------------------------------------
+            # Start Uvicorn
+            # --------------------------------------
+
+            echo "Starting Uvicorn..."
+
+            nohup /home/mi/quiz-game/venv/bin/python -u -c \
+              "import uvicorn; uvicorn.run(
+                'app.main:app',
+                host='0.0.0.0',
+                port=8080
+              )" \
+              >> /home/mi/quiz-game/quiz-game.log 2>&1 &
+
+            # --------------------------------------
+            # Give application time to start
+            # --------------------------------------
+
+            sleep 3
+
+            # --------------------------------------
+            # Check application process
+            # --------------------------------------
+
+            if pgrep -f '[u]vicorn.*app.main:app' > /dev/null; then
+              echo "Uvicorn is running."
+            else
+              echo "ERROR: Uvicorn failed to start."
+              echo "Last application logs:"
+              tail -n 100 /home/mi/quiz-game/quiz-game.log || true
+              exit 1
+            fi
+
+            # --------------------------------------
+            # Check local HTTP endpoint
+            # --------------------------------------
+
+            echo "Checking application on port 8080..."
+
+            if curl -fsS http://127.0.0.1:8080/ > /dev/null; then
+              echo "Application is responding."
+            else
+              echo "WARNING: Application did not respond to HTTP request."
+              echo "Last application logs:"
+              tail -n 100 /home/mi/quiz-game/quiz-game.log || true
+              exit 1
+            fi
+
+            # --------------------------------------
+            # Final nginx check
+            # --------------------------------------
+
+            echo "Checking nginx status..."
+
+            sudo systemctl is-active --quiet nginx
+
+            echo "======================================"
+            echo "Deploy complete!"
+            echo "======================================"
+
