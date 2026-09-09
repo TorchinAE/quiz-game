@@ -52,7 +52,8 @@ jobs:
             git config --global --add safe.directory /home/mi/quiz-game
             cd /home/mi/quiz-game
             git remote set-url origin https://github.com/TorchinAE/quiz-game.git
-            git pull origin quiz-game
+            git fetch origin quiz-game
+            git reset --hard origin/quiz-game
             python3 -m venv venv 2>/dev/null || true
             source venv/bin/activate
             pip install -r requirements.txt
