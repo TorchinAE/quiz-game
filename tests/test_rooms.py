@@ -1,6 +1,7 @@
+from unittest.mock import patch
+
 import pytest
 from sqlalchemy import select
-from unittest.mock import patch
 
 from app.database import async_session
 from app.models import Question, Topic
