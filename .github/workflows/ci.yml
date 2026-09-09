@@ -1,68 +1,61 @@
-name: CI/CD
+deploy:
+  needs: [lint, test]
+  runs-on: ubuntu-latest
+  if: github.ref == 'refs/heads/quiz-game' && github.event_name == 'push'
 
-on:
-  push:
-    branches: [quiz-game]
-  pull_request:
-    branches: [quiz-game]
+  steps:
+    - uses: actions/checkout@v4
 
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install ruff
-      - run: ruff check --fix .
-      - run: ruff format .
-      - run: git diff --exit-code
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_SSH_KEY }}
+        command_timeout: 10m
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: pytest --cov=app --cov-report=term-missing --cov-report=xml
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage.xml
+        script: |
+          set -e
 
-  deploy:
-    needs: [lint, test]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/quiz-game' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 10m
-          script: |
-            set +e
-            git config --global --add safe.directory /home/mi/quiz-game
-            cd /home/mi/quiz-game
-            git remote set-url origin https://github.com/TorchinAE/quiz-game.git
-            git fetch origin quiz-game
-            git reset --hard origin/quiz-game
-            python3 -m venv venv 2>/dev/null || true
-            source venv/bin/activate
-            pip install -r requirements.txt
-            sudo apt-get update -qq && sudo apt-get install -y nginx
-            sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-            sudo cp nginx/quiz-game.conf /etc/nginx/sites-available/quiz-game.conf
-            sudo ln -sf /etc/nginx/sites-available/quiz-game.conf /etc/nginx/sites-enabled/quiz-game.conf
-            sudo rm -f /etc/nginx/sites-enabled/default
-            sudo nginx -t && sudo systemctl reload nginx
-            pkill -f "uvicorn.*app.main:app" || true
-            setsid python3 -u -c "import uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=8080)" >> quiz-game.log 2>&1 &
-            echo "Deploy complete"
+          git config --global --add safe.directory /home/mi/quiz-game
+
+          cd /home/mi/quiz-game
+
+          git remote set-url origin https://github.com/TorchinAE/quiz-game.git
+          git fetch origin quiz-game
+          git reset --hard origin/quiz-game
+
+          python3 -m venv venv 2>/dev/null || true
+          source venv/bin/activate
+
+          pip install -r requirements.txt
+
+          sudo apt-get update -qq
+          sudo apt-get install -y nginx
+
+          sudo mkdir -p /etc/nginx/sites-available
+          sudo mkdir -p /etc/nginx/sites-enabled
+
+          sudo cp nginx/quiz-game.conf \
+            /etc/nginx/sites-available/quiz-game.conf
+
+          sudo ln -sf \
+            /etc/nginx/sites-available/quiz-game.conf \
+            /etc/nginx/sites-enabled/quiz-game.conf
+
+          sudo rm -f /etc/nginx/sites-enabled/default
+
+          sudo nginx -t
+          sudo systemctl reload nginx
+
+          # Останавливаем старый Uvicorn.
+          # [u] предотвращает совпадение pkill с самим собой.
+          pkill -f "[u]vicorn.*app.main:app" || true
+
+          sleep 2
+
+          nohup python3 -u -c \
+            "import uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=8080)" \
+            >> quiz-game.log 2>&1 &
+
+          echo "Deploy complete"
