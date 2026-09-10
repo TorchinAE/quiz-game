@@ -83,9 +83,9 @@ async def cmd_stats(update, context):
 
         async with async_session() as db:
             visit_count = (await db.execute(select(func.count(VisitStats.id)))).scalar() or 0
-            active_rooms = (await db.execute(
-                select(func.count(Room.id)).where(Room.status.in_(["waiting", "active"]))
-            )).scalar() or 0
+            active_rooms = (
+                await db.execute(select(func.count(Room.id)).where(Room.status.in_(["waiting", "active"])))
+            ).scalar() or 0
             total_rooms = (await db.execute(select(func.count(Room.id)))).scalar() or 0
 
         text = (
@@ -109,9 +109,7 @@ async def cmd_top(update, context):
         from app.models import Player
 
         async with async_session() as db:
-            result = await db.execute(
-                select(Player).order_by(Player.total_score.desc()).limit(10)
-            )
+            result = await db.execute(select(Player).order_by(Player.total_score.desc()).limit(10))
             players = result.scalars().all()
 
         if not players:
@@ -219,24 +217,24 @@ async def send_weekly_report():
         week_ago = now - timedelta(days=7)
 
         async with async_session() as db:
-            visit_count = (await db.execute(
-                select(func.count(VisitStats.id)).where(VisitStats.visited_at >= week_ago)
-            )).scalar() or 0
+            visit_count = (
+                await db.execute(select(func.count(VisitStats.id)).where(VisitStats.visited_at >= week_ago))
+            ).scalar() or 0
 
-            games_started = (await db.execute(
-                select(func.count(Room.id)).where(Room.started_at >= week_ago)
-            )).scalar() or 0
+            games_started = (
+                await db.execute(select(func.count(Room.id)).where(Room.started_at >= week_ago))
+            ).scalar() or 0
 
-            games_finished = (await db.execute(
-                select(func.count(Room.id)).where(
-                    Room.status == "finished",
-                    Room.started_at >= week_ago,
+            games_finished = (
+                await db.execute(
+                    select(func.count(Room.id)).where(
+                        Room.status == "finished",
+                        Room.started_at >= week_ago,
+                    )
                 )
-            )).scalar() or 0
+            ).scalar() or 0
 
-            top_result = await db.execute(
-                select(Player).order_by(Player.total_score.desc()).limit(3)
-            )
+            top_result = await db.execute(select(Player).order_by(Player.total_score.desc()).limit(3))
             top_players = top_result.scalars().all()
 
         report = (

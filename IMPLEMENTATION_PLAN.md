@@ -109,6 +109,7 @@ class Topic(Base):
     # ... existing fields ...
     is_active = Column(Boolean, default=True)
 
+
 class Question(Base):
     # ... existing fields ...
     is_active = Column(Boolean, default=True)
@@ -159,7 +160,7 @@ class TopicVote(Base):
 
     suggested_topic = relationship("SuggestedTopic", back_populates="votes")
 
-# Add to SuggestedTopic:
+    # Add to SuggestedTopic:
     votes = relationship("TopicVote", back_populates="suggested_topic", cascade="all, delete-orphan")
 ```
 
@@ -207,9 +208,7 @@ result = await db.execute(select(Topic).where(Topic.is_active == True))
 
 Update `rooms.py` `start_room_game` to filter active questions:
 ```python
-q_result = await db.execute(
-    select(Question).where(Question.topic_id == req.topic_id, Question.is_active == True)
-)
+q_result = await db.execute(select(Question).where(Question.topic_id == req.topic_id, Question.is_active == True))
 ```
 
 Update `admin.py` `list_topics` and `list_questions` to include `is_active` in response and support filtering.
@@ -259,12 +258,14 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
     # Return {"url": "/pictures/filename.jpg"}
     ...
 
+
 @router.get("/api/admin/images")
 async def list_images(request: Request):
     """List all images in pictures/ directory."""
     require_admin(request)
     # Return [{"name": "q001.jpg", "url": "/pictures/q001.jpg", "size": 12345}]
     ...
+
 
 @router.delete("/api/admin/images/{filename}")
 async def delete_image(filename: str, request: Request):
@@ -286,6 +287,7 @@ async def toggle_topic(topic_id: int, request: Request, db: AsyncSession = Depen
     require_admin(request)
     # Flip is_active, return new state
     ...
+
 
 @router.put("/api/admin/questions/{question_id}/toggle")
 async def toggle_question(question_id: int, request: Request, db: AsyncSession = Depends(get_db)):
@@ -507,8 +509,9 @@ async function loadAvailableTopics() {
 # app/routers/suggestions.py (new file)
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
+
 @router.post("")
-async def suggest_topic(req: SuggestRequest, player: dict = Depends(get_current_player), db = Depends(get_db)):
+async def suggest_topic(req: SuggestRequest, player: dict = Depends(get_current_player), db=Depends(get_db)):
     """Submit a topic suggestion. Max 120 chars."""
     if len(req.name) > 120:
         raise HTTPException(400, "Max 120 characters")
@@ -521,14 +524,16 @@ async def suggest_topic(req: SuggestRequest, player: dict = Depends(get_current_
     await db.commit()
     return {"ok": True}
 
+
 @router.get("")
-async def list_suggestions(db = Depends(get_db)):
+async def list_suggestions(db=Depends(get_db)):
     """List all suggestions with vote counts, ordered by votes."""
     # JOIN with votes, compute net score
     ...
 
+
 @router.post("/{suggestion_id}/vote")
-async def vote_suggestion(suggestion_id: int, req: VoteRequest, player = Depends(get_current_player), db = Depends(get_db)):
+async def vote_suggestion(suggestion_id: int, req: VoteRequest, player=Depends(get_current_player), db=Depends(get_db)):
     """Vote +1 or -1 on a suggestion. One vote per player."""
     ...
 ```
@@ -572,6 +577,7 @@ Each suggestion item:
 In `app/main.py`:
 ```python
 from app.routers import suggestions
+
 app.include_router(suggestions.router)
 ```
 
@@ -605,6 +611,7 @@ Looking at the spec more carefully: "editable team name" likely means the player
 ```python
 class UpdateNicknameRequest(BaseModel):
     nickname: str
+
 
 @router.put("/{code}/nickname")
 async def update_nickname(
@@ -713,6 +720,7 @@ from app.config import TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_ID
 # /backup — trigger backup (see F9)
 # /report — weekly report (see F10)
 
+
 async def start_bot():
     """Start the telegram bot as a background task."""
     if not TELEGRAM_BOT_TOKEN:
@@ -731,19 +739,19 @@ async def start_bot():
     await app.start()
     await app.updater.start_polling()
 
+
 # Scheduled notifications:
 # - New topic notification at 10:00 MSK daily
 # - Weekly voting results on Mondays
+
 
 async def notify_new_topic(topic_name: str):
     """Send notification when a new topic is created."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ADMIN_ID:
         return
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    await bot.send_message(
-        chat_id=TELEGRAM_ADMIN_ID,
-        text=f"🆕 Новая тема создана: {topic_name}"
-    )
+    await bot.send_message(chat_id=TELEGRAM_ADMIN_ID, text=f"🆕 Новая тема создана: {topic_name}")
+
 
 async def notify_weekly_voting():
     """Send weekly voting results summary."""
@@ -755,6 +763,7 @@ async def notify_weekly_voting():
 ```python
 # In lifespan:
 from app.telegram_bot import start_bot
+
 bot_task = asyncio.create_task(start_bot())
 # ...
 yield
@@ -794,6 +803,7 @@ from datetime import datetime
 
 BACKUP_DIR = "/tmp/quiz_backup"
 
+
 async def create_backup() -> str:
     """Create a backup archive. Returns path to archive."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -802,13 +812,13 @@ async def create_backup() -> str:
     archive_path = os.path.join(BACKUP_DIR, archive_name)
 
     # Tar up: pictures/, data/questions.csv, data/quiz.db
-    subprocess.run([
-        "tar", "-czf", archive_path,
-        "-C", "/home/mi/quiz-game",
-        "pictures/", "data/questions.csv", "data/quiz.db"
-    ], check=True)
+    subprocess.run(
+        ["tar", "-czf", archive_path, "-C", "/home/mi/quiz-game", "pictures/", "data/questions.csv", "data/quiz.db"],
+        check=True,
+    )
 
     return archive_path
+
 
 async def upload_backup(archive_path: str):
     """Upload backup to external server via SCP."""
@@ -816,6 +826,7 @@ async def upload_backup(archive_path: str):
         return False
     # Use subprocess to SCP the file
     ...
+
 
 async def auto_backup_loop():
     """Background task that runs backup every N days."""
@@ -826,6 +837,7 @@ async def auto_backup_loop():
             await upload_backup(path)
             # Notify via bot
             from app.telegram_bot import notify_backup_complete
+
             await notify_backup_complete()
         except Exception:
             pass
@@ -839,9 +851,11 @@ async def trigger_backup(request: Request):
     """Manually trigger backup."""
     require_admin(request)
     from app.backup import create_backup, upload_backup
+
     path = await create_backup()
     await upload_backup(path)
     return {"ok": True, "path": path}
+
 
 @router.get("/api/admin/backup/download")
 async def download_backup(request: Request):
@@ -922,7 +936,7 @@ db.add(visit)
 ```python
 # app/routers/admin.py additions
 @router.get("/api/admin/stats")
-async def get_stats(request: Request, db = Depends(get_db)):
+async def get_stats(request: Request, db=Depends(get_db)):
     """Get comprehensive statistics."""
     require_admin(request)
     # Total visits, unique players, games started/finished/abandoned
@@ -931,15 +945,17 @@ async def get_stats(request: Request, db = Depends(get_db)):
     # Visit trends (last 30 days)
     ...
 
+
 @router.get("/api/admin/stats/visits")
-async def get_visit_stats(request: Request, days: int = 30, db = Depends(get_db)):
+async def get_visit_stats(request: Request, days: int = 30, db=Depends(get_db)):
     """Get visit statistics for chart."""
     require_admin(request)
     # Group by day, return [{date: "2026-06-15", count: 42}, ...]
     ...
 
+
 @router.get("/api/admin/stats/games")
-async def get_game_stats(request: Request, days: int = 30, db = Depends(get_db)):
+async def get_game_stats(request: Request, days: int = 30, db=Depends(get_db)):
     """Get game statistics."""
     require_admin(request)
     # Games started, finished, abandoned per day
@@ -1091,11 +1107,14 @@ In `tests/conftest.py`, add:
 @pytest_asyncio.fixture
 async def player_token(client):
     """Register a player and return token."""
-    res = await client.post("/api/auth/player/register", json={
-        "nickname": "TestPlayer",
-        "email": "test@test.com",
-        "password": "pass1234",
-    })
+    res = await client.post(
+        "/api/auth/player/register",
+        json={
+            "nickname": "TestPlayer",
+            "email": "test@test.com",
+            "password": "pass1234",
+        },
+    )
     return res.json()["token"]
 ```
 

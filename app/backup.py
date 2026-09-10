@@ -41,7 +41,12 @@ async def create_backup() -> str:
         raise RuntimeError("Nothing to backup")
 
     proc = await asyncio.create_subprocess_exec(
-        "tar", "-czf", archive_path, "-C", PROJECT_ROOT, *sources,
+        "tar",
+        "-czf",
+        archive_path,
+        "-C",
+        PROJECT_ROOT,
+        *sources,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

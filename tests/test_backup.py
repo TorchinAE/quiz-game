@@ -12,8 +12,10 @@ async def test_trigger_backup_no_auth(client):
 
 async def test_trigger_backup_as_admin(client, admin_token):
     headers = {"Authorization": f"Bearer {admin_token}"}
-    with patch("app.backup.create_backup", new_callable=AsyncMock, return_value="/tmp/quiz_backup/test.tar.gz"), \
-         patch("app.backup.upload_backup", new_callable=AsyncMock, return_value=False):
+    with (
+        patch("app.backup.create_backup", new_callable=AsyncMock, return_value="/tmp/quiz_backup/test.tar.gz"),
+        patch("app.backup.upload_backup", new_callable=AsyncMock, return_value=False),
+    ):
         res = await client.post("/api/admin/backup", headers=headers)
     assert res.status_code == 200
     data = res.json()

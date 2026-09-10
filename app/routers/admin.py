@@ -317,18 +317,19 @@ async def delete_image(filename: str, request: Request):
 async def get_stats(request: Request, db: AsyncSession = Depends(get_db)):
     require_admin(request)
     total_visits = (await db.execute(select(func.count(VisitStats.id)))).scalar() or 0
-    unique_players = (await db.execute(
-        select(func.count(func.distinct(VisitStats.player_nickname)))
-        .where(VisitStats.player_nickname.isnot(None))
-    )).scalar() or 0
+    unique_players = (
+        await db.execute(
+            select(func.count(func.distinct(VisitStats.player_nickname))).where(VisitStats.player_nickname.isnot(None))
+        )
+    ).scalar() or 0
     total_rooms = (await db.execute(select(func.count(Room.id)))).scalar() or 0
-    active_rooms = (await db.execute(
-        select(func.count(Room.id)).where(Room.status.in_(["waiting", "active"]))
-    )).scalar() or 0
+    active_rooms = (
+        await db.execute(select(func.count(Room.id)).where(Room.status.in_(["waiting", "active"])))
+    ).scalar() or 0
     total_players = (await db.execute(select(func.count(Player.id)))).scalar() or 0
-    total_games_finished = (await db.execute(
-        select(func.count(Room.id)).where(Room.status == "finished")
-    )).scalar() or 0
+    total_games_finished = (
+        await db.execute(select(func.count(Room.id)).where(Room.status == "finished"))
+    ).scalar() or 0
 
     return {
         "total_visits": total_visits,

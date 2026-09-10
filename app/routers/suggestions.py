@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -30,13 +29,15 @@ async def list_suggestions(db: AsyncSession = Depends(get_db)):
             select(func.coalesce(func.sum(TopicVote.vote), 0)).where(TopicVote.suggested_topic_id == t.id)
         )
         rating = rating_result.scalar() or 0
-        items.append({
-            "id": t.id,
-            "name": t.name,
-            "suggested_by": t.suggested_by,
-            "rating": rating,
-            "created_at": t.created_at.isoformat() if t.created_at else None,
-        })
+        items.append(
+            {
+                "id": t.id,
+                "name": t.name,
+                "suggested_by": t.suggested_by,
+                "rating": rating,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+        )
 
     items.sort(key=lambda x: x["rating"], reverse=True)
     return items
