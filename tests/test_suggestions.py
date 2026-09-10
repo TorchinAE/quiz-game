@@ -1,8 +1,5 @@
 import pytest
 
-from app.database import async_session
-from app.models import Player
-
 pytestmark = pytest.mark.asyncio
 
 

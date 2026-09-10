@@ -1,4 +1,5 @@
 import uvicorn
+
 from app.config import PORT
 
 if __name__ == "__main__":

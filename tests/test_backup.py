@@ -1,6 +1,7 @@
 import os
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 
 pytestmark = pytest.mark.asyncio
 

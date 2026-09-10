@@ -1,5 +1,6 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 
 pytestmark = pytest.mark.asyncio
 
@@ -88,7 +89,7 @@ async def test_send_weekly_report_no_bot():
 async def test_start_bot_no_token():
     """Bot should not start when token is empty."""
     with patch("app.telegram_bot.TELEGRAM_BOT_TOKEN", ""):
-        from app.telegram_bot import start_bot, _bot_app
+        from app.telegram_bot import start_bot
 
         await start_bot()
         # Should remain None (no crash)
