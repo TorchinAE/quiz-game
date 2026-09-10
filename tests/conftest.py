@@ -5,6 +5,8 @@ from httpx import ASGITransport, AsyncClient
 
 # Use test database
 os.environ["QUIZ_DATABASE_URL"] = "sqlite+aiosqlite:///./data/test_quiz.db"
+os.environ["QUIZ_ADMIN_USERNAME"] = "k2k1"
+os.environ["QUIZ_ADMIN_PASSWORD"] = "123123"
 
 from app.database import Base, engine
 from app.main import app

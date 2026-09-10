@@ -6,8 +6,8 @@ SECRET_KEY = os.getenv("QUIZ_SECRET_KEY", "super-secret-quiz-key-2024")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
-ADMIN_USERNAME = "k2k1"
-ADMIN_PASSWORD = "123123"
+ADMIN_USERNAME = os.getenv("QUIZ_ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.getenv("QUIZ_ADMIN_PASSWORD", "")
 
 DATABASE_URL = os.getenv("QUIZ_DATABASE_URL", "sqlite+aiosqlite:///./data/quiz.db")
 

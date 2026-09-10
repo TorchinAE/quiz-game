@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import create_access_token, get_admin_token, verify_admin, verify_token
 from app.database import get_db
-from app.models import Player, Question, Room, RoomAnswer, SuggestedTopic, Topic, TopicVote, VisitStats
+from app.models import Player, Question, Room, Topic, VisitStats
 
 router = APIRouter(tags=["admin"])
 

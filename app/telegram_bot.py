@@ -1,6 +1,5 @@
 """Telegram bot for quiz game notifications and admin commands."""
 
-import asyncio
 import logging
 
 from app.config import TELEGRAM_ADMIN_ID, TELEGRAM_BOT_TOKEN
@@ -77,9 +76,10 @@ async def cmd_stats(update, context):
     if not _is_admin(update):
         return
     try:
+        from sqlalchemy import func, select
+
         from app.database import async_session
-        from app.models import VisitStats, Room
-        from sqlalchemy import select, func
+        from app.models import Room, VisitStats
 
         async with async_session() as db:
             visit_count = (await db.execute(select(func.count(VisitStats.id)))).scalar() or 0
@@ -103,9 +103,10 @@ async def cmd_top(update, context):
     if not _is_admin(update):
         return
     try:
+        from sqlalchemy import select
+
         from app.database import async_session
         from app.models import Player
-        from sqlalchemy import select
 
         async with async_session() as db:
             result = await db.execute(
@@ -129,9 +130,10 @@ async def cmd_votes(update, context):
     if not _is_admin(update):
         return
     try:
+        from sqlalchemy import func, select
+
         from app.database import async_session
         from app.models import SuggestedTopic, TopicVote
-        from sqlalchemy import select, func
 
         async with async_session() as db:
             result = await db.execute(
@@ -207,9 +209,11 @@ async def send_weekly_report():
         return
     try:
         from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import func, select
+
         from app.database import async_session
-        from app.models import VisitStats, Room, Player
-        from sqlalchemy import select, func
+        from app.models import Player, Room, VisitStats
 
         now = datetime.now(timezone.utc)
         week_ago = now - timedelta(days=7)
