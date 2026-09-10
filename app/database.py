@@ -38,3 +38,9 @@ async def init_db():
         columns = [row[1] for row in result.fetchall()]
         if "is_active" not in columns:
             await conn.execute(text("ALTER TABLE questions ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+
+        # Migration: add 'is_private' column to rooms if missing
+        result = await conn.execute(text("PRAGMA table_info(rooms)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "is_private" not in columns:
+            await conn.execute(text("ALTER TABLE rooms ADD COLUMN is_private BOOLEAN DEFAULT 0"))

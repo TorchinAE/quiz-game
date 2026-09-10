@@ -99,6 +99,7 @@ class Room(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(200), nullable=False, default="")
     code = Column(String(10), nullable=False, unique=True)
+    is_private = Column(Boolean, default=False)
     status = Column(String(20), default="waiting")  # waiting, active, finished
     topic_id = Column(Integer, ForeignKey("topics.id"), nullable=True)
     current_question_index = Column(Integer, default=-1)

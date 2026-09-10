@@ -31,6 +31,15 @@
             <label style="font-weight:600">Выберите тему:</label>
             <select id="topic-select" style="width:100%;margin-top:5px"></select>
         </div>
+        <div id="private-invite" style="display:none;margin-top:20px;text-align:center;padding:20px;background:rgba(233,69,96,0.05);border-radius:12px;border:1px solid rgba(233,69,96,0.15)">
+            <h3 style="color:var(--color-primary);margin-bottom:10px">🔒 Приватная комната</h3>
+            <p style="color:var(--text-secondary);margin-bottom:12px;font-size:0.9em">Поделитесь ссылкой или QR-кодом для приглашения</p>
+            <img id="room-qr" src="" alt="QR" style="width:160px;height:160px;margin:0 auto 12px;display:block;border-radius:10px;background:#fff;padding:6px">
+            <div style="display:flex;gap:8px;max-width:500px;margin:0 auto">
+                <input type="text" id="room-invite-link" readonly style="flex:1;margin-bottom:0;font-size:0.85em">
+                <button class="btn btn-primary btn-sm" onclick="copyRoomLink()">📋 Копировать</button>
+            </div>
+        </div>
         <div style="text-align:center;margin-top:20px">
             <button class="btn btn-success" id="start-btn" onclick="startGame()" style="display:none">Начать игру!</button>
             <p id="waiting-msg" class="pulse" style="display:none">Ожидание игроков...</p>
@@ -302,6 +311,14 @@ function renderWaitingRoom(state) {
         document.getElementById('waiting-msg').style.display = 'block';
         document.getElementById('waiting-msg').textContent = 'Ожидание начала игры...';
         document.getElementById('topic-select-wrap').style.display = 'none';
+    }
+
+    // Show private invite section
+    if (state.is_private) {
+        const url = location.origin + BASE + '/room/' + ROOM_CODE;
+        document.getElementById('room-invite-link').value = url;
+        document.getElementById('room-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(url);
+        document.getElementById('private-invite').style.display = 'block';
     }
 }
 
@@ -608,6 +625,17 @@ async function leaveRoom() {
         });
     } catch(e) {}
     window.location.href = BASE + '/';
+}
+
+function copyRoomLink() {
+    const url = document.getElementById('room-invite-link').value;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка скопирована!', 'success');
+    }).catch(() => {
+        document.getElementById('room-invite-link').select();
+        document.execCommand('copy');
+        showToast('Ссылка скопирована!', 'success');
+    });
 }
 
 // --- Section helper ---

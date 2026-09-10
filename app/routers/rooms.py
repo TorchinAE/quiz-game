@@ -30,6 +30,7 @@ def generate_room_code():
 class CreateRoomRequest(BaseModel):
     name: str = ""
     topic_id: int = 0
+    is_private: bool = False
 
 
 class JoinRequest(BaseModel):
@@ -80,7 +81,14 @@ async def create_room(
         room_count = len(count_result.scalars().all())
         name = f"Комната {room_count + 1}"
 
-    room = Room(code=code, name=name, status="waiting", topic_id=req.topic_id, last_activity_at=utcnow())
+    room = Room(
+        code=code,
+        name=name,
+        status="waiting",
+        topic_id=req.topic_id,
+        is_private=req.is_private,
+        last_activity_at=utcnow(),
+    )
     db.add(room)
     await db.flush()
 
@@ -96,13 +104,15 @@ async def create_room(
     await db.commit()
     await db.refresh(room)
 
-    return {"id": room.id, "code": room.code, "name": room.name, "status": room.status}
+    return {"id": room.id, "code": room.code, "name": room.name, "status": room.status, "is_private": room.is_private}
 
 
 @router.get("")
 async def list_rooms(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Room).where(Room.status.in_(["waiting", "active"])).order_by(Room.created_at.desc())
+        select(Room)
+        .where(Room.status.in_(["waiting", "active"]), Room.is_private == False)  # noqa: E712
+        .order_by(Room.created_at.desc())
     )
     rooms = result.scalars().all()
 
@@ -159,6 +169,7 @@ async def get_room(code: str, db: AsyncSession = Depends(get_db)):
         "code": room.code,
         "name": room.name or f"Комната {room.id}",
         "status": room.status,
+        "is_private": room.is_private,
         "topic": topic_name,
         "topic_id": room.topic_id,
         "current_question_index": room.current_question_index,
@@ -634,6 +645,7 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
         "status": room.status,
         "code": room.code,
         "name": room.name or f"Комната {room.id}",
+        "is_private": room.is_private,
         "topic": topic_name,
         "topic_id": room.topic_id,
         "current_question": current_q,

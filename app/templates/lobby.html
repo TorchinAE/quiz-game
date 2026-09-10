@@ -54,6 +54,9 @@
             <div class="card" style="margin-bottom:20px">
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                     <input type="text" id="new-room-name" placeholder="Название комнаты (необязательно)" maxlength="200" style="flex:1;min-width:200px;margin-bottom:0">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;margin-bottom:0">
+                        <input type="checkbox" id="new-room-private" style="margin-bottom:0"> 🔒 Приватная
+                    </label>
                     <button class="btn btn-success" onclick="createRoom()">+ Создать</button>
                 </div>
             </div>
@@ -89,6 +92,20 @@
                 <div class="leaderboard-empty">Пока нет зарегистрированных игроков</div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Private room invite modal -->
+<div id="private-invite-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePrivateModal()">
+    <div class="card" style="max-width:420px;text-align:center">
+        <h2 style="color:var(--color-primary);margin-bottom:15px">🔒 Приватная комната</h2>
+        <p style="color:var(--text-secondary);margin-bottom:15px">Поделитесь ссылкой или QR-кодом для приглашения игроков</p>
+        <img id="invite-qr" src="" alt="QR" style="width:200px;height:200px;margin:0 auto 15px;display:block;border-radius:10px;background:#fff;padding:8px">
+        <div style="display:flex;gap:8px;margin-bottom:15px">
+            <input type="text" id="invite-link" readonly style="flex:1;margin-bottom:0;font-size:0.9em">
+            <button class="btn btn-primary btn-sm" onclick="copyInviteLink()">📋 Копировать</button>
+        </div>
+        <button class="btn btn-success btn-block" onclick="goToPrivateRoom()">Перейти в комнату</button>
     </div>
 </div>
 {% endblock %}
@@ -266,16 +283,52 @@ async function createRoom() {
         return;
     }
     const name = document.getElementById('new-room-name').value.trim();
+    const isPrivate = document.getElementById('new-room-private').checked;
     try {
         const res = await fetchAuth(BASE + '/api/rooms', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
-            body: JSON.stringify({name, topic_id: selectedTopicId})
+            body: JSON.stringify({name, topic_id: selectedTopicId, is_private: isPrivate})
         });
         const data = await res.json();
         if (!res.ok) return showToast(data.detail, 'error');
-        window.location.href = BASE + '/room/' + data.code;
+        if (data.is_private) {
+            showPrivateInviteModal(data.code);
+        } else {
+            window.location.href = BASE + '/room/' + data.code;
+        }
     } catch(e) { showToast('Ошибка сети', 'error'); }
+}
+
+function showPrivateInviteModal(code) {
+    const url = location.origin + BASE + '/room/' + code;
+    document.getElementById('invite-link').value = url;
+    document.getElementById('invite-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
+    document.getElementById('private-invite-modal').style.display = 'flex';
+}
+
+function closePrivateModal() {
+    document.getElementById('private-invite-modal').style.display = 'none';
+}
+
+let pendingPrivateCode = null;
+function goToPrivateRoom() {
+    const link = document.getElementById('invite-link').value;
+    const code = link.split('/room/')[1];
+    closePrivateModal();
+    window.location.href = BASE + '/room/' + code;
+}
+
+function copyInviteLink() {
+    const url = document.getElementById('invite-link').value;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка скопирована!', 'success');
+    }).catch(() => {
+        document.getElementById('invite-link').select();
+        document.execCommand('copy');
+        showToast('Ссылка скопирована!', 'success');
+    });
+}
 }
 
 async function joinRoom(code, team, role) {
