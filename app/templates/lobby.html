@@ -98,6 +98,17 @@
 const token = localStorage.getItem('quiz_token');
 const playerData = JSON.parse(localStorage.getItem('quiz_player') || 'null');
 
+async function fetchAuth(url, options) {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+        localStorage.removeItem('quiz_token');
+        localStorage.removeItem('quiz_player');
+        showToast('Сессия истекла, войдите заново', 'error');
+        setTimeout(() => location.reload(), 1500);
+    }
+    return res;
+}
+
 // --- Init ---
 updateAuthBar();
 if (token && playerData) {
@@ -251,34 +262,34 @@ async function loadRooms() {
 async function createRoom() {
     if (!token) { showAuth(); return; }
     if (!selectedTopicId) {
-        showError('Выберите тему для игры');
+        showToast('Выберите тему для игры', 'error');
         return;
     }
     const name = document.getElementById('new-room-name').value.trim();
     try {
-        const res = await fetch(BASE + '/api/rooms', {
+        const res = await fetchAuth(BASE + '/api/rooms', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({name, topic_id: selectedTopicId})
         });
         const data = await res.json();
-        if (!res.ok) return showError(data.detail);
+        if (!res.ok) return showToast(data.detail, 'error');
         window.location.href = BASE + '/room/' + data.code;
-    } catch(e) { showError('Ошибка сети'); }
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 
 async function joinRoom(code, team, role) {
     if (!token) { showAuth(); return; }
     try {
-        const res = await fetch(`${BASE}/api/rooms/${code}/join`, {
+        const res = await fetchAuth(`${BASE}/api/rooms/${code}/join`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({team, role})
         });
         const data = await res.json();
-        if (!res.ok) return showError(data.detail);
+        if (!res.ok) return showToast(data.detail, 'error');
         window.location.href = BASE + '/room/' + code;
-    } catch(e) { showError('Ошибка сети'); }
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 
 // --- Leaderboard ---
@@ -362,26 +373,26 @@ async function suggestTopic() {
     const name = input.value.trim();
     if (!name) return;
     try {
-        const res = await fetch(BASE + '/api/suggestions', {
+        const res = await fetchAuth(BASE + '/api/suggestions', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({name})
         });
         if (!res.ok) {
             const data = await res.json();
-            alert(data.detail || 'Ошибка');
+            showToast(data.detail || 'Ошибка', 'error');
             return;
         }
         input.value = '';
         loadSuggestions();
         showToast('Предложение отправлено!', 'success');
-    } catch(e) { alert('Ошибка сети'); }
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 
 async function voteSuggestion(id, vote) {
     if (!token) { showAuth(); return; }
     try {
-        const res = await fetch(`${BASE}/api/suggestions/${id}/vote`, {
+        const res = await fetchAuth(`${BASE}/api/suggestions/${id}/vote`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({vote})
@@ -389,15 +400,14 @@ async function voteSuggestion(id, vote) {
         if (!res.ok) {
             const data = await res.json();
             if (res.status === 400 && data.detail === 'Вы уже голосовали') {
-                // Disable arrows for this item
                 loadSuggestions();
                 return;
             }
-            alert(data.detail || 'Ошибка');
+            showToast(data.detail || 'Ошибка', 'error');
             return;
         }
         loadSuggestions();
-    } catch(e) { alert('Ошибка сети'); }
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 
 // --- Toast ---
