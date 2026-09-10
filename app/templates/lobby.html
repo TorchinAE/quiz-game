@@ -9,8 +9,8 @@
             <div class="lobby-auth-bar" id="auth-bar"></div>
         </div>
 
-        <!-- Auth modal (hidden by default) -->
-        <div class="card auth-card" id="auth-section" style="display:none">
+        <!-- Auth section -->
+        <div class="card auth-card" id="auth-section">
             <h2>Вход</h2>
             <div id="auth-error" class="error" style="display:none"></div>
 
@@ -128,10 +128,8 @@ async function fetchAuth(url, options) {
 
 // --- Init ---
 updateAuthBar();
-if (token && playerData) {
-    document.getElementById('create-room-section').style.display = 'block';
-    loadTopicCards();
-}
+document.getElementById('create-room-section').style.display = 'block';
+loadTopicCards();
 document.getElementById('rooms-title').style.display = 'block';
 loadRooms();
 loadLeaderboard();
@@ -142,18 +140,24 @@ setInterval(loadLeaderboard, 10000);
 // --- Auth bar ---
 function updateAuthBar() {
     const bar = document.getElementById('auth-bar');
+    const authSection = document.getElementById('auth-section');
     if (token && playerData) {
         const label = playerData.is_registered
             ? `${playerData.nickname} (зарегистрирован)`
             : `${playerData.nickname} (гость)`;
         bar.innerHTML = `<span class="player-label">${label}</span> <button class="btn btn-secondary btn-sm" onclick="logout()">Выйти</button>`;
+        authSection.style.display = 'none';
     } else {
         bar.innerHTML = `<button class="btn btn-primary btn-sm" onclick="showAuth()">Войти</button>`;
+        authSection.style.display = 'block';
     }
 }
 
 function showAuth() {
-    document.getElementById('auth-section').style.display = 'block';
+    const el = document.getElementById('auth-section');
+    el.scrollIntoView({behavior: 'smooth', block: 'center'});
+    el.style.boxShadow = '0 0 0 3px #e94560';
+    setTimeout(() => el.style.boxShadow = '', 2000);
 }
 
 function showAuthTab(tab) {
