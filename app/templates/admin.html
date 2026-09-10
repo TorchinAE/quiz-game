@@ -21,6 +21,8 @@
             <button class="admin-nav-btn" data-section="votes" onclick="showSection('votes')">Голосования</button>
             <button class="admin-nav-btn" data-section="top" onclick="showSection('top')">Топ-игроки</button>
             <button class="admin-nav-btn" data-section="users" onclick="showSection('users')">Пользователи</button>
+            <button class="admin-nav-btn" data-section="stats" onclick="showSection('stats')">Статистика</button>
+            <button class="admin-nav-btn" data-section="backup" onclick="showSection('backup')">Бэкап</button>
             <div class="admin-sidebar-footer">
                 <button class="btn btn-secondary btn-sm btn-block" onclick="logout()">Выйти</button>
             </div>
@@ -72,6 +74,34 @@
                     <h2>Пользователи</h2>
                 </div>
                 <div id="users-list"></div>
+            </section>
+
+            <!-- Stats Section -->
+            <section id="sec-stats" class="admin-section" style="display:none">
+                <div class="admin-section-header">
+                    <h2>Статистика</h2>
+                </div>
+                <div id="stats-summary" class="stats-cards"></div>
+                <div style="margin-top:20px">
+                    <h3 style="margin-bottom:10px">Посещения (30 дней)</h3>
+                    <canvas id="visits-chart" height="200"></canvas>
+                </div>
+                <div style="margin-top:20px">
+                    <h3 style="margin-bottom:10px">Игры (30 дней)</h3>
+                    <canvas id="games-chart" height="200"></canvas>
+                </div>
+            </section>
+
+            <!-- Backup Section -->
+            <section id="sec-backup" class="admin-section" style="display:none">
+                <div class="admin-section-header">
+                    <h2>Бэкап</h2>
+                </div>
+                <div style="display:flex;gap:10px;margin-bottom:15px">
+                    <button class="btn btn-primary" onclick="triggerBackup()">Создать бэкап</button>
+                    <button class="btn btn-secondary" onclick="downloadBackup()">Скачать бэкап</button>
+                </div>
+                <div id="backup-status" style="color:var(--text-secondary)"></div>
             </section>
         </main>
     </div>
@@ -174,8 +204,11 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
 let adminToken = localStorage.getItem('admin_token');
+let visitsChart = null;
+let gamesChart = null;
 if (adminToken) showPanel();
 
 function imgUrl(url) {
@@ -229,6 +262,7 @@ function showSection(name) {
     if (name === 'votes') loadVotes();
     if (name === 'top') loadTopPlayers();
     if (name === 'users') loadUsers();
+    if (name === 'stats') loadStats();
 }
 
 // --- Topics ---
@@ -469,6 +503,105 @@ function showError(elId, msg) {
     el.textContent = msg;
     el.style.display = 'block';
     setTimeout(() => el.style.display = 'none', 3000);
+}
+
+// --- Stats ---
+async function loadStats() {
+    try {
+        const res = await fetch(BASE + '/api/admin/stats', {headers: headers()});
+        if (!res.ok) return;
+        const s = await res.json();
+        document.getElementById('stats-summary').innerHTML = `
+            <div class="stat-card"><div class="stat-value">${s.total_visits}</div><div class="stat-label">Посещений</div></div>
+            <div class="stat-card"><div class="stat-value">${s.unique_players}</div><div class="stat-label">Уникальных игроков</div></div>
+            <div class="stat-card"><div class="stat-value">${s.total_rooms}</div><div class="stat-label">Всего комнат</div></div>
+            <div class="stat-card"><div class="stat-value">${s.active_rooms}</div><div class="stat-label">Активных комнат</div></div>
+            <div class="stat-card"><div class="stat-value">${s.total_players}</div><div class="stat-label">Зарегистрировано</div></div>
+            <div class="stat-card"><div class="stat-value">${s.total_games_finished}</div><div class="stat-label">Игр завершено</div></div>
+        `;
+    } catch {}
+
+    try {
+        const res = await fetch(BASE + '/api/admin/stats/visits?days=30', {headers: headers()});
+        if (res.ok) {
+            const data = await res.json();
+            if (visitsChart) visitsChart.destroy();
+            visitsChart = new Chart(document.getElementById('visits-chart'), {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Посещения',
+                        data: data.map(d => d.count),
+                        borderColor: '#e94560',
+                        backgroundColor: 'rgba(233,69,96,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {legend: {labels: {color: '#eee'}}},
+                    scales: {
+                        x: {ticks: {color: '#888'}},
+                        y: {ticks: {color: '#888'}, beginAtZero: true}
+                    }
+                }
+            });
+        }
+    } catch {}
+
+    try {
+        const res = await fetch(BASE + '/api/admin/stats/games?days=30', {headers: headers()});
+        if (res.ok) {
+            const data = await res.json();
+            if (gamesChart) gamesChart.destroy();
+            gamesChart = new Chart(document.getElementById('games-chart'), {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Игры',
+                        data: data.map(d => d.count),
+                        backgroundColor: '#00b894',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {legend: {labels: {color: '#eee'}}},
+                    scales: {
+                        x: {ticks: {color: '#888'}},
+                        y: {ticks: {color: '#888'}, beginAtZero: true}
+                    }
+                }
+            });
+        }
+    } catch {}
+}
+
+// --- Backup ---
+async function triggerBackup() {
+    const el = document.getElementById('backup-status');
+    el.textContent = 'Создаю бэкап...';
+    el.style.color = 'var(--text-secondary)';
+    try {
+        const res = await fetch(BASE + '/api/admin/backup', {method: 'POST', headers: headers()});
+        const data = await res.json();
+        if (res.ok) {
+            el.textContent = 'Бэкап создан: ' + data.path;
+            el.style.color = 'var(--color-success)';
+        } else {
+            el.textContent = 'Ошибка: ' + (data.detail || 'неизвестная');
+            el.style.color = 'var(--color-primary)';
+        }
+    } catch (e) {
+        el.textContent = 'Ошибка сети';
+        el.style.color = 'var(--color-primary)';
+    }
+}
+
+async function downloadBackup() {
+    window.open(BASE + '/api/admin/backup/download', '_blank');
 }
 </script>
 {% endblock %}

@@ -1013,7 +1013,7 @@ job_queue.run_daily(send_weekly_report, time=datetime.time(hour=7, minute=0), da
 
 ---
 
-## Phase 11: Tests (F11) — Commit: "test: add tests for all new features"
+## Phase 11: Tests (F11) — ✅ DONE — Commit: "test: add tests for all new features"
 
 ### 11.1 Test files to create/modify
 
@@ -1042,20 +1042,20 @@ job_queue.run_daily(send_weekly_report, time=datetime.time(hour=7, minute=0), da
 # ~10-12 tests
 ```
 
-**`tests/test_backup.py`** (new):
+**`tests/test_backup.py`** (new) ✅:
 ```python
-# Test create backup (mock filesystem)
-# Test backup triggers correctly
-# Test admin-only access
-# ~3-5 tests
+# Test create backup (mock filesystem) ✅
+# Test backup triggers correctly ✅
+# Test admin-only access ✅
+# 5 tests created and passing
 ```
 
-**`tests/test_telegram.py`** (new):
+**`tests/test_telegram.py`** (new) ✅:
 ```python
-# Test admin ID check
-# Test command handlers (mock bot)
-# Test notification functions
-# ~5-8 tests
+# Test admin ID check ✅
+# Test command handlers (mock bot) ✅
+# Test notification functions ✅
+# 10 tests created and passing
 ```
 
 **`tests/test_rooms.py`** (modify):
@@ -1082,7 +1082,7 @@ job_queue.run_daily(send_weekly_report, time=datetime.time(hour=7, minute=0), da
 # ~2 new tests
 ```
 
-### 11.2 Total new tests: ~30-42 tests
+### 11.2 Total new tests: ~30-42 tests ✅ (150 total passing)
 
 ### 11.3 Test fixtures updates
 

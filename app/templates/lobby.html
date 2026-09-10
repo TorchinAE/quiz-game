@@ -72,7 +72,7 @@
             <h3>💡 Предложить тему</h3>
             <div style="display:flex;gap:8px">
                 <input type="text" id="suggest-input" placeholder="Название темы (до 120 симв.)" maxlength="120" style="margin-bottom:0;flex:1">
-                <button class="btn btn-primary btn-sm" onclick="suggestTopic()">OK</button>
+                <button class="btn btn-primary btn-sm" onclick="suggestTopic()">Предложить</button>
             </div>
         </div>
         <!-- Voting -->
@@ -250,12 +250,16 @@ async function loadRooms() {
 
 async function createRoom() {
     if (!token) { showAuth(); return; }
+    if (!selectedTopicId) {
+        showError('Выберите тему для игры');
+        return;
+    }
     const name = document.getElementById('new-room-name').value.trim();
     try {
         const res = await fetch(BASE + '/api/rooms', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
-            body: JSON.stringify({name})
+            body: JSON.stringify({name, topic_id: selectedTopicId})
         });
         const data = await res.json();
         if (!res.ok) return showError(data.detail);

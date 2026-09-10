@@ -29,6 +29,7 @@ def generate_room_code():
 
 class CreateRoomRequest(BaseModel):
     name: str = ""
+    topic_id: int = 0
 
 
 class JoinRequest(BaseModel):
@@ -63,6 +64,15 @@ async def create_room(
             break
         code = generate_room_code()
 
+    # Topic selection is required
+    if not req.topic_id:
+        raise HTTPException(status_code=400, detail="Выберите тему для игры")
+
+    topic_result = await db.execute(select(Topic).where(Topic.id == req.topic_id))
+    topic = topic_result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Тема не найдена")
+
     # Auto-generate name if not provided
     name = req.name.strip()
     if not name:
@@ -70,7 +80,7 @@ async def create_room(
         room_count = len(count_result.scalars().all())
         name = f"Комната {room_count + 1}"
 
-    room = Room(code=code, name=name, status="waiting", last_activity_at=utcnow())
+    room = Room(code=code, name=name, status="waiting", topic_id=req.topic_id, last_activity_at=utcnow())
     db.add(room)
     await db.flush()
 
@@ -625,6 +635,7 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
         "code": room.code,
         "name": room.name or f"Комната {room.id}",
         "topic": topic_name,
+        "topic_id": room.topic_id,
         "current_question": current_q,
         "team_a": {
             "score": team_a_score,

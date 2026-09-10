@@ -65,7 +65,7 @@ async def create_and_join_room(client, topic_id, player_a_token, player_b_token)
     headers_b = {"Authorization": f"Bearer {player_b_token}"}
 
     # Create room
-    res = await client.post("/api/rooms", headers=headers_a)
+    res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers_a)
     code = res.json()["code"]
 
     # Join as team A player
@@ -83,11 +83,12 @@ async def create_and_join_room(client, topic_id, player_a_token, player_b_token)
 
 
 async def test_create_room(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Создатель")
     token = reg["token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    res = await client.post("/api/rooms", headers=headers)
+    res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     assert res.status_code == 200
     data = res.json()
     assert "code" in data
@@ -96,20 +97,22 @@ async def test_create_room(client):
 
 
 async def test_list_rooms(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Списочник")
     headers = {"Authorization": f"Bearer {reg['token']}"}
 
-    await client.post("/api/rooms", headers=headers)
+    await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     res = await client.get("/api/rooms")
     assert res.status_code == 200
     assert len(res.json()) >= 1
 
 
 async def test_get_room(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Получатель")
     headers = {"Authorization": f"Bearer {reg['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     res = await client.get(f"/api/rooms/{code}")
@@ -126,12 +129,13 @@ async def test_get_room_not_found(client):
 
 
 async def test_join_room_as_player(client):
+    topic_id, _ = await seed_topic()
     reg_a = await register_player(client, "ИгрокA")
     reg_b = await register_player(client, "ИгрокB")
     headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
     headers_b = {"Authorization": f"Bearer {reg_b['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers_a)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers_a)
     code = create_res.json()["code"]
 
     res = await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers_b)
@@ -140,12 +144,13 @@ async def test_join_room_as_player(client):
 
 
 async def test_join_room_as_observer(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Наблюдатель")
     reg2 = await register_player(client, "Зритель")
     headers = {"Authorization": f"Bearer {reg['token']}"}
     headers2 = {"Authorization": f"Bearer {reg2['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     res = await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "observer"}, headers=headers2)
@@ -154,10 +159,11 @@ async def test_join_room_as_observer(client):
 
 
 async def test_join_room_already_in(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Двойник")
     headers = {"Authorization": f"Bearer {reg['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers)
@@ -167,12 +173,13 @@ async def test_join_room_already_in(client):
 
 
 async def test_join_room_invalid_team(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Кривой")
     reg2 = await register_player(client, "Кривой2")
     headers = {"Authorization": f"Bearer {reg['token']}"}
     headers2 = {"Authorization": f"Bearer {reg2['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     res = await client.post(f"/api/rooms/{code}/join", json={"team": "C", "role": "player"}, headers=headers2)
@@ -180,12 +187,13 @@ async def test_join_room_invalid_team(client):
 
 
 async def test_join_room_invalid_role(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Роль")
     reg2 = await register_player(client, "Роль2")
     headers = {"Authorization": f"Bearer {reg['token']}"}
     headers2 = {"Authorization": f"Bearer {reg2['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     res = await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "spectator"}, headers=headers2)
@@ -220,12 +228,13 @@ async def test_join_finished_room(client):
 
 
 async def test_leave_room(client):
+    topic_id, _ = await seed_topic()
     reg_a = await register_player(client, "УходА")
     reg_b = await register_player(client, "УходБ")
     headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
     headers_b = {"Authorization": f"Bearer {reg_b['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers_a)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers_a)
     code = create_res.json()["code"]
 
     await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers_b)
@@ -252,7 +261,7 @@ async def test_join_room_full_team(client):
         players.append(reg)
 
     headers0 = {"Authorization": f"Bearer {players[0]['token']}"}
-    create_res = await client.post("/api/rooms", headers=headers0)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers0)
     code = create_res.json()["code"]
 
     # Join 4 players as team A (MAX_PLAYERS_PER_TEAM = 4)
@@ -277,7 +286,7 @@ async def test_start_room_game(client):
     reg_b = await register_player(client, "СтартБ", "start_b@test.com")
     headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers_a)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers_a)
     code = create_res.json()["code"]
 
     await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers_a)
@@ -297,7 +306,7 @@ async def test_start_room_game_no_players_b(client):
     reg = await register_player(client, "Одинокий", "alone@test.com")
     headers = {"Authorization": f"Bearer {reg['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers)
@@ -308,11 +317,12 @@ async def test_start_room_game_no_players_b(client):
 
 
 async def test_start_room_game_topic_not_found(client):
+    topic_id, _ = await seed_topic()
     reg_a = await register_player(client, "ТемаА", "topic_a@test.com")
     reg_b = await register_player(client, "ТемаБ", "topic_b@test.com")
     headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers_a)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers_a)
     code = create_res.json()["code"]
 
     await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers_a)
@@ -444,7 +454,7 @@ async def test_room_submit_answer_observer(client):
     headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
     headers_obs = {"Authorization": f"Bearer {reg_obs['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers_a)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers_a)
     code = create_res.json()["code"]
 
     await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers_a)
@@ -502,10 +512,11 @@ async def test_room_reset_not_found(client):
 
 
 async def test_room_state_waiting(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "Состояние", "state@test.com")
     headers = {"Authorization": f"Bearer {reg['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     res = await client.get(f"/api/rooms/{code}/state")
@@ -530,10 +541,11 @@ async def test_room_state_not_found(client):
 
 
 async def test_room_next_question_no_active(client):
+    topic_id, _ = await seed_topic()
     reg = await register_player(client, "НетАктив", "noactive@test.com")
     headers = {"Authorization": f"Bearer {reg['token']}"}
 
-    create_res = await client.post("/api/rooms", headers=headers)
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
     code = create_res.json()["code"]
 
     res = await client.post(f"/api/rooms/{code}/next", headers=headers)
@@ -554,3 +566,42 @@ async def test_room_finish_game(client):
 
     res = await client.get(f"/api/rooms/{code}/state")
     assert res.json()["status"] == "finished"
+
+
+# --- Nickname editing ---
+
+
+async def test_update_nickname_in_waiting_room(client):
+    topic_id, _ = await seed_topic()
+    reg = await register_player(client, "СтарыйНик", "oldnick@test.com")
+    headers = {"Authorization": f"Bearer {reg['token']}"}
+
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
+    code = create_res.json()["code"]
+
+    res = await client.put(f"/api/rooms/{code}/nickname", json={"nickname": "НовыйНик"}, headers=headers)
+    assert res.status_code == 200
+    assert res.json()["nickname"] == "НовыйНик"
+
+
+async def test_update_nickname_in_active_room(client):
+    topic_id, _ = await seed_topic()
+    reg_a = await register_player(client, "НикАктивА", "nick_active_a@test.com")
+    reg_b = await register_player(client, "НикАктивБ", "nick_active_b@test.com")
+    code = await create_and_join_room(client, topic_id, reg_a["token"], reg_b["token"])
+    headers_a = {"Authorization": f"Bearer {reg_a['token']}"}
+
+    res = await client.put(f"/api/rooms/{code}/nickname", json={"nickname": "Нельзя"}, headers=headers_a)
+    assert res.status_code == 400
+
+
+async def test_update_nickname_empty(client):
+    topic_id, _ = await seed_topic()
+    reg = await register_player(client, "ПустойНик", "empty_nick@test.com")
+    headers = {"Authorization": f"Bearer {reg['token']}"}
+
+    create_res = await client.post("/api/rooms", json={"topic_id": topic_id}, headers=headers)
+    code = create_res.json()["code"]
+
+    res = await client.put(f"/api/rooms/{code}/nickname", json={"nickname": ""}, headers=headers)
+    assert res.status_code == 400

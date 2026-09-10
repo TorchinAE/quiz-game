@@ -93,6 +93,7 @@ let ws = null;
 let timerInterval = null;
 let currentQuestion = null;
 let answered = false;
+let selectedOption = null;
 let revealTimeout = null;
 let isObserver = false;
 let nextQuestionInFlight = false;
@@ -270,7 +271,7 @@ function renderWaitingRoom(state) {
         document.getElementById('start-btn').style.display = 'inline-block';
         document.getElementById('waiting-msg').style.display = 'none';
         document.getElementById('topic-select-wrap').style.display = 'block';
-        loadTopics();
+        loadTopics(state.topic_id);
     } else if (!isObserver) {
         document.getElementById('start-btn').style.display = 'none';
         document.getElementById('waiting-msg').style.display = 'block';
@@ -284,11 +285,11 @@ function renderWaitingRoom(state) {
     }
 }
 
-async function loadTopics() {
+async function loadTopics(selectedId) {
     const res = await fetch(BASE + '/api/game/topics');
     const topics = await res.json();
     const sel = document.getElementById('topic-select');
-    sel.innerHTML = topics.map(t => `<option value="${t.id}">${t.name} (${t.question_count} вопросов)</option>`).join('');
+    sel.innerHTML = topics.map(t => `<option value="${t.id}"${t.id === selectedId ? ' selected' : ''}>${t.name} (${t.question_count} вопросов)</option>`).join('');
 }
 
 async function startGame() {
@@ -310,6 +311,7 @@ async function startGame() {
 function showQuestion(q) {
     currentQuestion = q;
     answered = false;
+    selectedOption = null;
     nextQuestionInFlight = false;
     nextRetryCount = 0;
     showingReveal = false;
@@ -397,6 +399,8 @@ function disableOptions() {
 }
 
 async function onTimerExpired() {
+    // Submit the selected answer when time expires
+    await submitAnswer();
     disableOptions();
     try {
         const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/state`);
@@ -423,16 +427,20 @@ async function onTimerExpired() {
 }
 
 // --- Answer ---
-async function selectOption(key) {
+function selectOption(key) {
     if (answered || isObserver) return;
-    answered = true;
 
+    // Deselect previous, select new
     document.querySelectorAll('.option-btn').forEach(b => {
-        if (b.tagName === 'BUTTON') {
-            b.disabled = true;
-            if (b.id === 'opt-' + key) b.classList.add('selected');
-        }
+        if (b.tagName === 'BUTTON') b.classList.remove('selected');
     });
+    document.getElementById('opt-' + key).classList.add('selected');
+    selectedOption = key;
+}
+
+async function submitAnswer() {
+    if (!selectedOption || !currentQuestion || answered) return;
+    answered = true;
 
     try {
         const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/answer`, {
@@ -441,22 +449,16 @@ async function selectOption(key) {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + token,
             },
-            body: JSON.stringify({question_id: currentQuestion.id, option: key})
+            body: JSON.stringify({question_id: currentQuestion.id, option: selectedOption})
         });
         const data = await res.json();
         if (!res.ok) {
-            document.getElementById('opt-' + key).classList.remove('selected');
             answered = false;
-            document.querySelectorAll('.option-btn').forEach(b => {
-                if (b.tagName === 'BUTTON') b.disabled = false;
-            });
-            alert(data.detail);
+            // Don't alert on timer expiry — just log
+            console.log('Answer rejected:', data.detail);
         }
     } catch(e) {
         answered = false;
-        document.querySelectorAll('.option-btn').forEach(b => {
-            if (b.tagName === 'BUTTON') b.disabled = false;
-        });
     }
 }
 

@@ -1,15 +1,17 @@
+import glob
 import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import create_access_token, get_admin_token, verify_admin, verify_token
 from app.database import get_db
-from app.models import Question, Topic
+from app.models import Player, Question, Room, RoomAnswer, SuggestedTopic, Topic, TopicVote, VisitStats
 
 router = APIRouter(tags=["admin"])
 
@@ -306,3 +308,96 @@ async def delete_image(filename: str, request: Request):
         raise HTTPException(status_code=404, detail="File not found")
     os.remove(filepath)
     return {"ok": True}
+
+
+# --- Stats ---
+
+
+@router.get("/api/admin/stats")
+async def get_stats(request: Request, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    total_visits = (await db.execute(select(func.count(VisitStats.id)))).scalar() or 0
+    unique_players = (await db.execute(
+        select(func.count(func.distinct(VisitStats.player_nickname)))
+        .where(VisitStats.player_nickname.isnot(None))
+    )).scalar() or 0
+    total_rooms = (await db.execute(select(func.count(Room.id)))).scalar() or 0
+    active_rooms = (await db.execute(
+        select(func.count(Room.id)).where(Room.status.in_(["waiting", "active"]))
+    )).scalar() or 0
+    total_players = (await db.execute(select(func.count(Player.id)))).scalar() or 0
+    total_games_finished = (await db.execute(
+        select(func.count(Room.id)).where(Room.status == "finished")
+    )).scalar() or 0
+
+    return {
+        "total_visits": total_visits,
+        "unique_players": unique_players,
+        "total_rooms": total_rooms,
+        "active_rooms": active_rooms,
+        "total_players": total_players,
+        "total_games_finished": total_games_finished,
+    }
+
+
+@router.get("/api/admin/stats/visits")
+async def get_visit_stats(request: Request, days: int = 30, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    result = await db.execute(
+        select(
+            func.date(VisitStats.visited_at).label("date"),
+            func.count(VisitStats.id).label("count"),
+        )
+        .where(VisitStats.visited_at >= cutoff)
+        .group_by(func.date(VisitStats.visited_at))
+        .order_by(func.date(VisitStats.visited_at))
+    )
+    return [{"date": str(row.date), "count": row.count} for row in result.all()]
+
+
+@router.get("/api/admin/stats/games")
+async def get_game_stats(request: Request, days: int = 30, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    result = await db.execute(
+        select(
+            func.date(Room.started_at).label("date"),
+            func.count(Room.id).label("count"),
+        )
+        .where(Room.started_at >= cutoff)
+        .group_by(func.date(Room.started_at))
+        .order_by(func.date(Room.started_at))
+    )
+    return [{"date": str(row.date), "count": row.count} for row in result.all()]
+
+
+# --- Backup ---
+
+
+BACKUP_DIR = "/tmp/quiz_backup"
+
+
+@router.post("/api/admin/backup")
+async def trigger_backup(request: Request):
+    require_admin(request)
+    from app.backup import create_backup, upload_backup
+
+    path = await create_backup()
+    await upload_backup(path)
+    return {"ok": True, "path": path}
+
+
+@router.get("/api/admin/backup/download")
+async def download_backup(request: Request):
+    require_admin(request)
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    archives = sorted(glob.glob(os.path.join(BACKUP_DIR, "quiz_backup_*.tar.gz")))
+    if not archives:
+        raise HTTPException(status_code=404, detail="No backups found")
+    latest = archives[-1]
+    return FileResponse(latest, filename=os.path.basename(latest), media_type="application/gzip")
