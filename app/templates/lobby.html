@@ -45,10 +45,15 @@
         <!-- Create room -->
         <div id="create-room-section" style="display:none">
             <div class="card" style="margin-bottom:20px">
-                <div style="display:flex;gap:10px;align-items:center">
-                    <input type="text" id="new-room-name" placeholder="Название комнаты (необязательно)" maxlength="200" style="flex:1">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <input type="text" id="new-room-name" placeholder="Название комнаты (необязательно)" maxlength="200" style="flex:1;min-width:200px">
                     <button class="btn btn-success" onclick="createRoom()">+ Создать</button>
                 </div>
+            </div>
+            <!-- Topic cards -->
+            <div id="topic-cards-wrap" style="margin-bottom:20px">
+                <h3 style="color:var(--color-primary);margin-bottom:12px">Темы для игры</h3>
+                <div id="topic-cards" class="topic-cards-grid"></div>
             </div>
         </div>
 
@@ -60,8 +65,24 @@
         </div>
     </div>
 
-    <!-- Sidebar: Leaderboard -->
+    <!-- Sidebar -->
     <div class="lobby-sidebar">
+        <!-- Suggest topic -->
+        <div class="sidebar-section" style="margin-bottom:20px">
+            <h3>💡 Предложить тему</h3>
+            <div style="display:flex;gap:8px">
+                <input type="text" id="suggest-input" placeholder="Название темы (до 120 симв.)" maxlength="120" style="margin-bottom:0;flex:1">
+                <button class="btn btn-primary btn-sm" onclick="suggestTopic()">Предложить</button>
+            </div>
+        </div>
+        <!-- Voting -->
+        <div class="sidebar-section" style="margin-bottom:20px">
+            <h3>🗳 Голосование за темы</h3>
+            <div id="suggestions-list">
+                <div class="leaderboard-empty">Пока нет предложений</div>
+            </div>
+        </div>
+        <!-- Leaderboard -->
         <div class="sidebar-section">
             <h3>🏆 Топ-5 игроков</h3>
             <div id="leaderboard-list">
@@ -81,10 +102,12 @@ const playerData = JSON.parse(localStorage.getItem('quiz_player') || 'null');
 updateAuthBar();
 if (token && playerData) {
     document.getElementById('create-room-section').style.display = 'block';
+    loadTopicCards();
 }
 document.getElementById('rooms-title').style.display = 'block';
 loadRooms();
 loadLeaderboard();
+loadSuggestions();
 setInterval(loadRooms, 3000);
 setInterval(loadLeaderboard, 10000);
 
@@ -227,12 +250,16 @@ async function loadRooms() {
 
 async function createRoom() {
     if (!token) { showAuth(); return; }
+    if (!selectedTopicId) {
+        showError('Выберите тему для игры');
+        return;
+    }
     const name = document.getElementById('new-room-name').value.trim();
     try {
         const res = await fetch(BASE + '/api/rooms', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
-            body: JSON.stringify({name})
+            body: JSON.stringify({name, topic_id: selectedTopicId})
         });
         const data = await res.json();
         if (!res.ok) return showError(data.detail);
@@ -272,6 +299,104 @@ async function loadLeaderboard() {
             </div>
         `).join('');
     } catch(e) {}
+}
+
+// --- Topic cards ---
+async function loadTopicCards() {
+    try {
+        const res = await fetch(BASE + '/api/game/topics');
+        if (!res.ok) return;
+        const topics = await res.json();
+        const container = document.getElementById('topic-cards');
+        container.innerHTML = topics.map(t => `
+            <div class="topic-select-card" onclick="selectTopicCard(this, ${t.id})" data-id="${t.id}">
+                <div class="topic-select-name">${t.name}</div>
+                <div class="topic-select-count">${t.question_count} вопросов</div>
+            </div>
+        `).join('');
+    } catch(e) {}
+}
+
+let selectedTopicId = null;
+function selectTopicCard(el, id) {
+    document.querySelectorAll('.topic-select-card').forEach(c => c.classList.remove('selected'));
+    if (selectedTopicId === id) {
+        selectedTopicId = null;
+    } else {
+        el.classList.add('selected');
+        selectedTopicId = id;
+    }
+}
+
+// --- Suggestions ---
+async function loadSuggestions() {
+    try {
+        const res = await fetch(BASE + '/api/suggestions');
+        if (!res.ok) return;
+        const items = await res.json();
+        const container = document.getElementById('suggestions-list');
+        if (!items.length) {
+            container.innerHTML = '<div class="leaderboard-empty">Пока нет предложений</div>';
+            return;
+        }
+        const nickname = playerData ? playerData.nickname : null;
+        container.innerHTML = items.map(s => `
+            <div class="vote-item">
+                <div class="vote-item-info">
+                    <span class="vote-item-name">${s.name}</span>
+                    <span class="vote-item-author">от ${s.suggested_by}</span>
+                </div>
+                <div class="vote-item-actions">
+                    <button class="vote-arrow vote-up" onclick="voteSuggestion(${s.id}, 1)" ${!nickname ? 'disabled' : ''}>▲</button>
+                    <span class="vote-item-rating">${s.rating > 0 ? '+' : ''}${s.rating}</span>
+                    <button class="vote-arrow vote-down" onclick="voteSuggestion(${s.id}, -1)" ${!nickname ? 'disabled' : ''}>▼</button>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) {}
+}
+
+async function suggestTopic() {
+    if (!token) { showAuth(); return; }
+    const input = document.getElementById('suggest-input');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+        const res = await fetch(BASE + '/api/suggestions', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({name})
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            alert(data.detail || 'Ошибка');
+            return;
+        }
+        input.value = '';
+        loadSuggestions();
+    } catch(e) { alert('Ошибка сети'); }
+}
+
+async function voteSuggestion(id, vote) {
+    if (!token) { showAuth(); return; }
+    try {
+        const res = await fetch(`${BASE}/api/suggestions/${id}/vote`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({vote})
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            if (res.status === 400 && data.detail === 'Вы уже голосовали') {
+                // Disable arrows for this item
+                loadSuggestions();
+                return;
+            }
+            alert(data.detail || 'Ошибка');
+            return;
+        }
+        loadSuggestions();
+    } catch(e) { alert('Ошибка сети'); }
 }
 
 // --- Error ---

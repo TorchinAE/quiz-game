@@ -43,9 +43,14 @@
             <span class="question-counter" id="q-counter"></span>
             <span class="difficulty" id="q-difficulty"></span>
         </div>
-        <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
-        <div class="timer-text" id="timer-text">20</div>
-        <img class="question-image" id="q-image" style="display:none" referrerpolicy="no-referrer" crossorigin="anonymous">
+        <div class="timer-circle-wrap">
+            <svg class="timer-circle" viewBox="0 0 100 100">
+                <circle class="timer-circle-bg" cx="50" cy="50" r="42"/>
+                <circle class="timer-circle-fill" id="timer-circle-fill" cx="50" cy="50" r="42"/>
+            </svg>
+            <span class="timer-circle-text" id="timer-text">20</span>
+        </div>
+        <img class="question-image" id="q-image" referrerpolicy="no-referrer" crossorigin="anonymous">
         <div class="question-text" id="q-text"></div>
         <div class="options-grid" id="options"></div>
     </div>
@@ -88,6 +93,7 @@ let ws = null;
 let timerInterval = null;
 let currentQuestion = null;
 let answered = false;
+let selectedOption = null;
 let revealTimeout = null;
 let isObserver = false;
 let nextQuestionInFlight = false;
@@ -96,6 +102,12 @@ let showingReveal = false;
 let pendingNextQuestion = null;
 
 document.getElementById('room-code').textContent = ROOM_CODE;
+
+function imgUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return BASE + (url.startsWith('/') ? url : '/' + url);
+}
 
 // --- WebSocket ---
 function connectWS() {
@@ -234,15 +246,23 @@ function renderWaitingRoom(state) {
     const container = document.getElementById('waiting-teams');
     const teamAMembers = state.team_a?.members || [];
     const teamBMembers = state.team_b?.members || [];
+    const myNickname = playerData ? playerData.nickname : null;
+
+    function renderMember(m) {
+        if (m.nickname === myNickname && !isObserver) {
+            return `<span class="member-item"><span class="member-name">${m.nickname}</span> <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:0.75em" onclick="editNickname()">✏️</button></span>`;
+        }
+        return `<span class="member-item">${m.nickname}</span>`;
+    }
 
     container.innerHTML = `
         <div class="card card-compact team-card">
             <div class="team-name">Команда A</div>
-            <div class="team-members">${teamAMembers.map(m => m.nickname).join(', ') || 'Пусто'}</div>
+            <div class="team-members">${teamAMembers.map(renderMember).join(', ') || 'Пусто'}</div>
         </div>
         <div class="card card-compact team-card">
             <div class="team-name">Команда B</div>
-            <div class="team-members">${teamBMembers.map(m => m.nickname).join(', ') || 'Пусто'}</div>
+            <div class="team-members">${teamBMembers.map(renderMember).join(', ') || 'Пусто'}</div>
         </div>
     `;
 
@@ -251,7 +271,7 @@ function renderWaitingRoom(state) {
         document.getElementById('start-btn').style.display = 'inline-block';
         document.getElementById('waiting-msg').style.display = 'none';
         document.getElementById('topic-select-wrap').style.display = 'block';
-        loadTopics();
+        loadTopics(state.topic_id);
     } else if (!isObserver) {
         document.getElementById('start-btn').style.display = 'none';
         document.getElementById('waiting-msg').style.display = 'block';
@@ -265,11 +285,11 @@ function renderWaitingRoom(state) {
     }
 }
 
-async function loadTopics() {
+async function loadTopics(selectedId) {
     const res = await fetch(BASE + '/api/game/topics');
     const topics = await res.json();
     const sel = document.getElementById('topic-select');
-    sel.innerHTML = topics.map(t => `<option value="${t.id}">${t.name} (${t.question_count} вопросов)</option>`).join('');
+    sel.innerHTML = topics.map(t => `<option value="${t.id}"${t.id === selectedId ? ' selected' : ''}>${t.name} (${t.question_count} вопросов)</option>`).join('');
 }
 
 async function startGame() {
@@ -291,6 +311,7 @@ async function startGame() {
 function showQuestion(q) {
     currentQuestion = q;
     answered = false;
+    selectedOption = null;
     nextQuestionInFlight = false;
     nextRetryCount = 0;
     showingReveal = false;
@@ -308,13 +329,9 @@ function showQuestion(q) {
     document.getElementById('q-text').textContent = q.text;
 
     const imgEl = document.getElementById('q-image');
-    if (q.image_url) {
-        imgEl.src = q.image_url;
-        imgEl.style.display = 'block';
-        imgEl.onerror = () => { imgEl.style.display = 'none'; };
-    } else {
-        imgEl.style.display = 'none';
-    }
+    imgEl.src = q.image_url ? imgUrl(q.image_url) : BASE + '/static/placeholder.svg';
+    imgEl.style.display = 'block';
+    imgEl.onerror = () => { imgEl.src = BASE + '/static/placeholder.svg'; };
 
     const options = [
         {key: 'A', text: q.option_a},
@@ -341,13 +358,18 @@ function showQuestion(q) {
     startTimer(q.time_left || 20);
 }
 
-// --- Timer ---
+// --- Timer (SVG circle) ---
+const CIRCUMFERENCE = 2 * Math.PI * 42; // r=42
+
 function startTimer(seconds) {
     let timeLeft = seconds;
-    const fill = document.getElementById('timer-fill');
+    const totalTime = seconds;
+    const circle = document.getElementById('timer-circle-fill');
     const text = document.getElementById('timer-text');
-    fill.style.width = '100%';
+    circle.style.strokeDasharray = CIRCUMFERENCE;
+    circle.style.strokeDashoffset = '0';
     text.textContent = Math.ceil(timeLeft);
+    updateTimerColor(circle, 1);
 
     clearInterval(timerInterval);
     timerInterval = setInterval(() => {
@@ -357,9 +379,17 @@ function startTimer(seconds) {
             timeLeft = 0;
             onTimerExpired();
         }
-        fill.style.width = (timeLeft / 20 * 100) + '%';
+        const fraction = timeLeft / totalTime;
+        circle.style.strokeDashoffset = CIRCUMFERENCE * (1 - fraction);
+        updateTimerColor(circle, fraction);
         text.textContent = Math.ceil(timeLeft);
     }, 100);
+}
+
+function updateTimerColor(circle, fraction) {
+    if (fraction > 0.5) circle.style.stroke = '#00b894';
+    else if (fraction > 0.25) circle.style.stroke = '#fdcb6e';
+    else circle.style.stroke = '#e94560';
 }
 
 function disableOptions() {
@@ -369,6 +399,8 @@ function disableOptions() {
 }
 
 async function onTimerExpired() {
+    // Submit the selected answer when time expires
+    await submitAnswer();
     disableOptions();
     try {
         const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/state`);
@@ -395,16 +427,20 @@ async function onTimerExpired() {
 }
 
 // --- Answer ---
-async function selectOption(key) {
+function selectOption(key) {
     if (answered || isObserver) return;
-    answered = true;
 
+    // Deselect previous, select new
     document.querySelectorAll('.option-btn').forEach(b => {
-        if (b.tagName === 'BUTTON') {
-            b.disabled = true;
-            if (b.id === 'opt-' + key) b.classList.add('selected');
-        }
+        if (b.tagName === 'BUTTON') b.classList.remove('selected');
     });
+    document.getElementById('opt-' + key).classList.add('selected');
+    selectedOption = key;
+}
+
+async function submitAnswer() {
+    if (!selectedOption || !currentQuestion || answered) return;
+    answered = true;
 
     try {
         const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/answer`, {
@@ -413,22 +449,16 @@ async function selectOption(key) {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + token,
             },
-            body: JSON.stringify({question_id: currentQuestion.id, option: key})
+            body: JSON.stringify({question_id: currentQuestion.id, option: selectedOption})
         });
         const data = await res.json();
         if (!res.ok) {
-            document.getElementById('opt-' + key).classList.remove('selected');
             answered = false;
-            document.querySelectorAll('.option-btn').forEach(b => {
-                if (b.tagName === 'BUTTON') b.disabled = false;
-            });
-            alert(data.detail);
+            // Don't alert on timer expiry — just log
+            console.log('Answer rejected:', data.detail);
         }
     } catch(e) {
         answered = false;
-        document.querySelectorAll('.option-btn').forEach(b => {
-            if (b.tagName === 'BUTTON') b.disabled = false;
-        });
     }
 }
 
@@ -525,6 +555,30 @@ function showGameOver(data) {
             </tr>
         </table>
     `;
+}
+
+// --- Nickname edit ---
+async function editNickname() {
+    const newNick = prompt('Новый никнейм:', playerData ? playerData.nickname : '');
+    if (!newNick || !newNick.trim()) return;
+    try {
+        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/nickname`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token,
+            },
+            body: JSON.stringify({nickname: newNick.trim()})
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail); return; }
+        // Update local state
+        if (playerData) {
+            playerData.nickname = data.nickname;
+            localStorage.setItem('quiz_player', JSON.stringify(playerData));
+        }
+        loadState();
+    } catch(e) { alert('Ошибка сети'); }
 }
 
 // --- Leave ---

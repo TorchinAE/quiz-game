@@ -29,6 +29,7 @@ def generate_room_code():
 
 class CreateRoomRequest(BaseModel):
     name: str = ""
+    topic_id: int = 0
 
 
 class JoinRequest(BaseModel):
@@ -45,6 +46,10 @@ class AnswerRequest(BaseModel):
     option: str
 
 
+class NicknameRequest(BaseModel):
+    nickname: str
+
+
 @router.post("")
 async def create_room(
     req: CreateRoomRequest = CreateRoomRequest(),
@@ -59,6 +64,15 @@ async def create_room(
             break
         code = generate_room_code()
 
+    # Topic selection is required
+    if not req.topic_id:
+        raise HTTPException(status_code=400, detail="Выберите тему для игры")
+
+    topic_result = await db.execute(select(Topic).where(Topic.id == req.topic_id))
+    topic = topic_result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Тема не найдена")
+
     # Auto-generate name if not provided
     name = req.name.strip()
     if not name:
@@ -66,7 +80,7 @@ async def create_room(
         room_count = len(count_result.scalars().all())
         name = f"Комната {room_count + 1}"
 
-    room = Room(code=code, name=name, status="waiting", last_activity_at=utcnow())
+    room = Room(code=code, name=name, status="waiting", topic_id=req.topic_id, last_activity_at=utcnow())
     db.add(room)
     await db.flush()
 
@@ -261,6 +275,48 @@ async def leave_room(
     return {"ok": True}
 
 
+@router.put("/{code}/nickname")
+async def update_nickname(
+    code: str,
+    req: NicknameRequest,
+    player: dict = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Room).where(Room.code == code.upper()))
+    room = result.scalar_one_or_none()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.status != "waiting":
+        raise HTTPException(status_code=400, detail="Can only change nickname in waiting room")
+
+    nickname = player.get("nickname", "Unknown")
+    new_nickname = req.nickname.strip()
+    if not new_nickname or len(new_nickname) > 100:
+        raise HTTPException(status_code=400, detail="Никнейм от 1 до 100 символов")
+
+    member_result = await db.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.id,
+            RoomMember.nickname == nickname,
+        )
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="You are not in this room")
+
+    member.nickname = new_nickname
+    db.add(member)
+    room.last_activity_at = utcnow()
+    db.add(room)
+    await db.commit()
+
+    from app.routers.ws import broadcast_room_update
+
+    await broadcast_room_update(room.code)
+
+    return {"ok": True, "nickname": new_nickname}
+
+
 @router.post("/{code}/start")
 async def start_room_game(
     code: str,
@@ -293,7 +349,9 @@ async def start_room_game(
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
 
-    q_result = await db.execute(select(Question).where(Question.topic_id == req.topic_id))
+    q_result = await db.execute(
+        select(Question).where(Question.topic_id == req.topic_id, Question.is_active == True)  # noqa: E712
+    )
     all_questions = q_result.scalars().all()
     if len(all_questions) < QUESTIONS_PER_GAME:
         raise HTTPException(
@@ -461,26 +519,11 @@ async def submit_answer(
     )
     db.add(answer)
 
-    if is_correct:
-        # Add score to all players on this team
-        team_members_result = await db.execute(
-            select(RoomMember).where(
-                RoomMember.room_id == room.id,
-                RoomMember.team == member.team,
-                RoomMember.role == "player",
-            )
-        )
-        for tm in team_members_result.scalars().all():
-            tm.score += question.difficulty
-            db.add(tm)
+    # Scores are deferred — calculated on reveal, not on answer
 
     room.last_activity_at = utcnow()
     db.add(room)
     await db.commit()
-
-    from app.routers.ws import broadcast_scores_to_room
-
-    await broadcast_scores_to_room(room.code)
 
     return {"is_correct": is_correct, "team": member.team}
 
@@ -592,6 +635,7 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
         "code": room.code,
         "name": room.name or f"Комната {room.id}",
         "topic": topic_name,
+        "topic_id": room.topic_id,
         "current_question": current_q,
         "team_a": {
             "score": team_a_score,

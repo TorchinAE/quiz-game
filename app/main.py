@@ -12,8 +12,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import ROOM_INACTIVITY_TIMEOUT_SECONDS
 from app.database import async_session, init_db
-from app.models import Question, Room, Topic
-from app.routers import admin, auth_router, game, leaderboard, rooms, ws
+from app.models import Question, Room, Topic, VisitStats
+from app.routers import admin, auth_router, game, leaderboard, rooms, suggestions, ws
 
 
 async def load_questions_from_csv():
@@ -85,13 +85,59 @@ async def inactivity_checker():
             pass
 
 
+async def log_visit(page: str, request: Request):
+    """Log a page visit asynchronously."""
+    try:
+        nickname = request.cookies.get("player_nickname")
+        async with async_session() as db:
+            visit = VisitStats(page=page, player_nickname=nickname)
+            db.add(visit)
+            await db.commit()
+    except Exception:
+        pass
+
+
+class VisitTrackingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("text/html"):
+            path = request.url.path
+            if path in ("/", "/lobby"):
+                page = "lobby"
+            elif path.startswith("/room/"):
+                page = "room"
+            elif path == "/admin":
+                page = "admin"
+            else:
+                page = path
+            asyncio.create_task(log_visit(page, request))
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     await load_questions_from_csv()
-    task = asyncio.create_task(inactivity_checker())
+    inactivity_task = asyncio.create_task(inactivity_checker())
+
+    from app.config import TELEGRAM_BOT_TOKEN
+    from app.telegram_bot import start_bot, stop_bot
+
+    bot_task = None
+    if TELEGRAM_BOT_TOKEN:
+        bot_task = asyncio.create_task(start_bot())
+
+    from app.backup import auto_backup_loop
+
+    backup_task = asyncio.create_task(auto_backup_loop())
+
     yield
-    task.cancel()
+
+    inactivity_task.cancel()
+    backup_task.cancel()
+    if bot_task:
+        await stop_bot()
 
 
 app = FastAPI(title="Quiz Game", lifespan=lifespan)
@@ -107,6 +153,7 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(NoCacheMiddleware)
+app.add_middleware(VisitTrackingMiddleware)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 templates_dir = os.path.join(os.path.dirname(__file__), "templates")
@@ -121,6 +168,7 @@ app.include_router(game.router)
 app.include_router(ws.router)
 app.include_router(rooms.router)
 app.include_router(leaderboard.router)
+app.include_router(suggestions.router)
 
 
 # --- Page routes ---

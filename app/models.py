@@ -14,6 +14,7 @@ class Topic(Base):
     name = Column(String(200), nullable=False, unique=True)
     description = Column(Text, default="")
     image_url = Column(String(500), default="")
+    is_active = Column(Boolean, default=True)
 
     questions = relationship("Question", back_populates="topic", cascade="all, delete-orphan")
 
@@ -32,6 +33,8 @@ class Question(Base):
     correct_option = Column(String(1), nullable=False)  # A/B/C/D
     explanation = Column(Text, default="")
     difficulty = Column(Integer, default=1)  # 1, 2, or 3
+
+    is_active = Column(Boolean, default=True)
 
     topic = relationship("Topic", back_populates="questions")
 
@@ -138,3 +141,37 @@ class RoomAnswer(Base):
     selected_option = Column(String(1), nullable=False)
     is_correct = Column(Boolean, default=False)
     answered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class SuggestedTopic(Base):
+    __tablename__ = "suggested_topics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(120), nullable=False)
+    suggested_by = Column(String(100), nullable=False)
+    player_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    votes = relationship("TopicVote", back_populates="suggested_topic", cascade="all, delete-orphan")
+
+
+class TopicVote(Base):
+    __tablename__ = "topic_votes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    suggested_topic_id = Column(Integer, ForeignKey("suggested_topics.id"), nullable=False)
+    player_nickname = Column(String(100), nullable=False)
+    vote = Column(Integer, nullable=False)  # +1 or -1
+    voted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    suggested_topic = relationship("SuggestedTopic", back_populates="votes")
+
+
+class VisitStats(Base):
+    __tablename__ = "visit_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    page = Column(String(200), nullable=False)
+    player_nickname = Column(String(100), nullable=True)
+    visited_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    session_duration = Column(Integer, nullable=True)

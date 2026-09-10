@@ -29,12 +29,13 @@ class StartRequest(BaseModel):
 
 @router.get("/topics")
 async def list_topics(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Topic))
+    result = await db.execute(select(Topic).where(Topic.is_active == True))  # noqa: E712
     topics = result.scalars().all()
-    # Count questions per topic
     topics_data = []
     for t in topics:
-        q_count = await db.execute(select(Question).where(Question.topic_id == t.id))
+        q_count = await db.execute(
+            select(Question).where(Question.topic_id == t.id, Question.is_active == True)  # noqa: E712
+        )
         count = len(q_count.scalars().all())
         topics_data.append({"id": t.id, "name": t.name, "description": t.description, "question_count": count})
     return topics_data
@@ -224,8 +225,10 @@ async def start_game(req: StartRequest, request: Request, db: AsyncSession = Dep
         t.score = 0
         db.add(t)
 
-    # Filter questions by selected topic
-    q_result = await db.execute(select(Question).where(Question.topic_id == req.topic_id))
+    # Filter questions by selected topic (active only)
+    q_result = await db.execute(
+        select(Question).where(Question.topic_id == req.topic_id, Question.is_active == True)  # noqa: E712
+    )
     all_questions = q_result.scalars().all()
     if len(all_questions) < QUESTIONS_PER_GAME:
         raise HTTPException(
