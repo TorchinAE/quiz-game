@@ -1,5 +1,7 @@
 import os
 
+PORT = int(os.getenv("QUIZ_PORT", "8080"))
+
 SECRET_KEY = os.getenv("QUIZ_SECRET_KEY", "super-secret-quiz-key-2024")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours

@@ -1,10 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Квиз-Игра — Админка{% endblock %}
 {% block content %}
-<h1>Админка</h1>
-
-<div class="card" id="login-section">
-    <h2>Вход администратора</h2>
+<div id="login-section" class="card" style="max-width:400px;margin:80px auto">
+    <h2 style="color:var(--color-primary)">Вход администратора</h2>
     <div id="login-error" class="error" style="display:none"></div>
     <input type="text" id="admin-user" placeholder="Логин" value="k2k1">
     <input type="password" id="admin-pass" placeholder="Пароль">
@@ -12,30 +10,70 @@
 </div>
 
 <div id="admin-panel" style="display:none">
-    <div class="admin-header">
-        <h2>Управление контентом</h2>
-        <button class="btn btn-secondary btn-sm" onclick="logout()">Выйти</button>
-    </div>
-
-    <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-            <h3 style="color:#e94560">Темы</h3>
-            <button class="btn btn-primary btn-sm" onclick="showTopicModal()">+ Тема</button>
-        </div>
-        <div id="topics-list"></div>
-    </div>
-
-    <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
-            <h3 style="color:#e94560">Вопросы</h3>
-            <div style="display:flex;gap:10px">
-                <select id="filter-topic" onchange="loadQuestions()" style="width:auto">
-                    <option value="">Все темы</option>
-                </select>
-                <button class="btn btn-primary btn-sm" onclick="showQuestionModal()">+ Вопрос</button>
+    <div class="admin-layout">
+        <nav class="admin-sidebar">
+            <div class="admin-sidebar-header">
+                <span class="admin-logo">Q</span>
+                <span>Админка</span>
             </div>
-        </div>
-        <div id="questions-list"></div>
+            <button class="admin-nav-btn active" data-section="topics" onclick="showSection('topics')">Темы</button>
+            <button class="admin-nav-btn" data-section="questions" onclick="showSection('questions')">Вопросы</button>
+            <button class="admin-nav-btn" data-section="votes" onclick="showSection('votes')">Голосования</button>
+            <button class="admin-nav-btn" data-section="top" onclick="showSection('top')">Топ-игроки</button>
+            <button class="admin-nav-btn" data-section="users" onclick="showSection('users')">Пользователи</button>
+            <div class="admin-sidebar-footer">
+                <button class="btn btn-secondary btn-sm btn-block" onclick="logout()">Выйти</button>
+            </div>
+        </nav>
+
+        <main class="admin-content">
+            <!-- Topics Section -->
+            <section id="sec-topics" class="admin-section">
+                <div class="admin-section-header">
+                    <h2>Темы</h2>
+                    <button class="btn btn-primary btn-sm" onclick="showTopicModal()">+ Тема</button>
+                </div>
+                <div id="topics-list"></div>
+            </section>
+
+            <!-- Questions Section -->
+            <section id="sec-questions" class="admin-section" style="display:none">
+                <div class="admin-section-header">
+                    <h2>Вопросы</h2>
+                    <div style="display:flex;gap:10px;align-items:center">
+                        <select id="filter-topic" onchange="loadQuestions()" style="width:auto">
+                            <option value="">Все темы</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="showQuestionModal()">+ Вопрос</button>
+                    </div>
+                </div>
+                <div id="questions-list" class="questions-grid"></div>
+            </section>
+
+            <!-- Votes Section -->
+            <section id="sec-votes" class="admin-section" style="display:none">
+                <div class="admin-section-header">
+                    <h2>Голосования</h2>
+                </div>
+                <div id="votes-list"></div>
+            </section>
+
+            <!-- Top Players Section -->
+            <section id="sec-top" class="admin-section" style="display:none">
+                <div class="admin-section-header">
+                    <h2>Топ-игроки</h2>
+                </div>
+                <div id="top-list"></div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="sec-users" class="admin-section" style="display:none">
+                <div class="admin-section-header">
+                    <h2>Пользователи</h2>
+                </div>
+                <div id="users-list"></div>
+            </section>
+        </main>
     </div>
 </div>
 
@@ -59,11 +97,24 @@
     </div>
 </div>
 
-<!-- Question Modal -->
+<!-- Question Edit Modal -->
 <div class="modal-overlay" id="question-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
-    <div class="modal">
+    <div class="modal" style="max-width:700px">
         <h3 id="question-modal-title">Новый вопрос</h3>
         <input type="hidden" id="q-id">
+
+        <div class="q-edit-image-block">
+            <img id="q-edit-image" class="q-edit-thumb">
+            <div class="q-edit-image-btns">
+                <button class="btn btn-secondary btn-sm" onclick="removeQuestionImage()">Удалить</button>
+                <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                    Загрузить <input type="file" id="q-image-file" accept="image/*" style="display:none" onchange="uploadQuestionImage(this)">
+                </label>
+                <button class="btn btn-secondary btn-sm" onclick="browseImages()">Выбрать из каталога</button>
+            </div>
+            <input type="hidden" id="q-image" value="">
+        </div>
+
         <div class="form-group">
             <label>Тема</label>
             <select id="q-topic"></select>
@@ -72,35 +123,25 @@
             <label>Текст вопроса</label>
             <input type="text" id="q-text">
         </div>
-        <div class="form-group">
-            <label>URL картинки (необязательно)</label>
-            <input type="text" id="q-image">
+        <div class="q-options-edit">
+            <div class="form-group">
+                <label>Вариант A</label>
+                <div class="q-opt-row"><input type="text" id="q-opt-a"><button class="q-correct-toggle" data-opt="A" onclick="toggleCorrect(this)">✓</button></div>
+            </div>
+            <div class="form-group">
+                <label>Вариант B</label>
+                <div class="q-opt-row"><input type="text" id="q-opt-b"><button class="q-correct-toggle" data-opt="B" onclick="toggleCorrect(this)">✓</button></div>
+            </div>
+            <div class="form-group">
+                <label>Вариант C</label>
+                <div class="q-opt-row"><input type="text" id="q-opt-c"><button class="q-correct-toggle" data-opt="C" onclick="toggleCorrect(this)">✓</button></div>
+            </div>
+            <div class="form-group">
+                <label>Вариант D</label>
+                <div class="q-opt-row"><input type="text" id="q-opt-d"><button class="q-correct-toggle" data-opt="D" onclick="toggleCorrect(this)">✓</button></div>
+            </div>
         </div>
-        <div class="form-group">
-            <label>Вариант A</label>
-            <input type="text" id="q-opt-a">
-        </div>
-        <div class="form-group">
-            <label>Вариант B</label>
-            <input type="text" id="q-opt-b">
-        </div>
-        <div class="form-group">
-            <label>Вариант C</label>
-            <input type="text" id="q-opt-c">
-        </div>
-        <div class="form-group">
-            <label>Вариант D</label>
-            <input type="text" id="q-opt-d">
-        </div>
-        <div class="form-group">
-            <label>Правильный ответ</label>
-            <select id="q-correct">
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-            </select>
-        </div>
+        <input type="hidden" id="q-correct" value="A">
         <div class="form-group">
             <label>Пояснение</label>
             <input type="text" id="q-explanation">
@@ -119,12 +160,33 @@
         </div>
     </div>
 </div>
+
+<!-- Image Browser Modal -->
+<div class="modal-overlay" id="image-browser-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal" style="max-width:800px">
+        <h3>Выбрать изображение</h3>
+        <div id="image-browser-grid" class="image-browser-grid"></div>
+        <div style="margin-top:15px;text-align:right">
+            <button class="btn btn-secondary" onclick="document.getElementById('image-browser-modal').style.display='none'">Закрыть</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 let adminToken = localStorage.getItem('admin_token');
 if (adminToken) showPanel();
+
+function imgUrl(url) {
+    if (!url) return BASE + '/static/placeholder.svg';
+    if (url.startsWith('http')) return url;
+    return BASE + (url.startsWith('/') ? url : '/' + url);
+}
+
+function headers() {
+    return {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken};
+}
 
 async function adminLogin() {
     const username = document.getElementById('admin-user').value;
@@ -157,62 +219,44 @@ function showPanel() {
     loadQuestions();
 }
 
-function headers() {
-    return {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken};
+function showSection(name) {
+    document.querySelectorAll('.admin-section').forEach(s => s.style.display = 'none');
+    document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+    const sec = document.getElementById('sec-' + name);
+    if (sec) sec.style.display = 'block';
+    const btn = document.querySelector(`.admin-nav-btn[data-section="${name}"]`);
+    if (btn) btn.classList.add('active');
+    if (name === 'votes') loadVotes();
+    if (name === 'top') loadTopPlayers();
+    if (name === 'users') loadUsers();
 }
 
+// --- Topics ---
 async function loadTopics() {
     const res = await fetch(BASE + '/api/admin/topics', {headers: headers()});
     if (!res.ok) return;
     const topics = await res.json();
 
-    document.getElementById('topics-list').innerHTML = `
-        <table class="admin-table">
-            <tr><th>ID</th><th>Название</th><th>Вопросов</th><th>Действия</th></tr>
-            ${topics.map(t => `
-                <tr>
-                    <td>${t.id}</td>
-                    <td>${t.name}</td>
-                    <td>${t.question_count}</td>
-                    <td class="admin-actions">
-                        <button class="btn btn-secondary btn-sm" onclick='editTopic(${JSON.stringify(t)})'>✏️</button>
-                        <button class="btn btn-sm" style="background:#e94560" onclick="deleteTopic(${t.id})">🗑️</button>
-                    </td>
-                </tr>
-            `).join('')}
-        </table>
-    `;
+    document.getElementById('topics-list').innerHTML = topics.map(t => `
+        <div class="topic-card ${!t.is_active ? 'topic-inactive' : ''}">
+            <div class="topic-card-header">
+                <span class="topic-name">${t.name}</span>
+                <span class="topic-count">${t.active_question_count} активных (${t.question_count} всего)</span>
+            </div>
+            <div class="topic-card-desc">${t.description || ''}</div>
+            <div class="topic-card-actions">
+                <button class="btn btn-secondary btn-sm" onclick='editTopic(${JSON.stringify(t)})'>Редактировать</button>
+                <button class="btn btn-sm ${t.is_active ? 'btn-warn' : 'btn-success'}" onclick="toggleTopic(${t.id})">
+                    ${t.is_active ? 'Деактивировать' : 'Активировать'}
+                </button>
+                <button class="btn btn-sm" style="background:var(--color-primary)" onclick="deleteTopic(${t.id})">Удалить</button>
+            </div>
+        </div>
+    `).join('');
 
-    // Update filter dropdowns
     const opts = topics.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
     document.getElementById('filter-topic').innerHTML = '<option value="">Все темы</option>' + opts;
     document.getElementById('q-topic').innerHTML = opts;
-}
-
-async function loadQuestions() {
-    const topicId = document.getElementById('filter-topic').value;
-    const url = topicId ? `${BASE}/api/admin/questions?topic_id=${topicId}` : BASE + '/api/admin/questions';
-    const res = await fetch(url, {headers: headers()});
-    if (!res.ok) return;
-    const questions = await res.json();
-
-    document.getElementById('questions-list').innerHTML = `
-        <table class="admin-table">
-            <tr><th>ID</th><th>Вопрос</th><th>Правильный</th><th>Сложн.</th><th>Действия</th></tr>
-            ${questions.map(q => `
-                <tr>
-                    <td>${q.id}</td>
-                    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.text}</td>
-                    <td>${q.correct_option}</td>
-                    <td>${q.difficulty}</td>
-                    <td class="admin-actions">
-                        <button class="btn btn-secondary btn-sm" onclick='editQuestion(${JSON.stringify(q)})'>✏️</button>
-                        <button class="btn btn-sm" style="background:#e94560" onclick="deleteQuestion(${q.id})">🗑️</button>
-                    </td>
-                </tr>
-            `).join('')}
-        </table>
-    `;
 }
 
 function showTopicModal(topic) {
@@ -245,6 +289,40 @@ async function deleteTopic(id) {
     loadQuestions();
 }
 
+async function toggleTopic(id) {
+    await fetch(`${BASE}/api/admin/topics/${id}/toggle`, {method: 'PUT', headers: headers()});
+    loadTopics();
+}
+
+// --- Questions ---
+async function loadQuestions() {
+    const topicId = document.getElementById('filter-topic').value;
+    const url = topicId ? `${BASE}/api/admin/questions?topic_id=${topicId}` : BASE + '/api/admin/questions';
+    const res = await fetch(url, {headers: headers()});
+    if (!res.ok) return;
+    const questions = await res.json();
+
+    document.getElementById('questions-list').innerHTML = questions.map(q => `
+        <div class="question-card ${!q.is_active ? 'question-inactive' : ''}">
+            <img src="${imgUrl(q.image_url)}" class="question-card-thumb" onerror="this.src='${BASE}/static/placeholder.svg'">
+            <div class="question-card-body">
+                <div class="question-card-text">${q.text}</div>
+                <div class="question-card-meta">
+                    <span class="difficulty diff-${q.difficulty}">${q.difficulty}</span>
+                    <span>Правильный: ${q.correct_option}</span>
+                </div>
+            </div>
+            <div class="question-card-actions">
+                <button class="btn btn-secondary btn-sm" onclick='editQuestion(${JSON.stringify(q)})'>Редактировать</button>
+                <button class="btn btn-sm ${q.is_active ? 'btn-warn' : 'btn-success'}" onclick="toggleQuestion(${q.id})">
+                    ${q.is_active ? 'Деактивировать' : 'Активировать'}
+                </button>
+                <button class="btn btn-sm" style="background:var(--color-primary)" onclick="deleteQuestion(${q.id})">Удалить</button>
+            </div>
+        </div>
+    `).join('');
+}
+
 function showQuestionModal(q) {
     document.getElementById('question-modal').style.display = 'flex';
     document.getElementById('question-modal-title').textContent = q ? 'Редактировать вопрос' : 'Новый вопрос';
@@ -252,6 +330,7 @@ function showQuestionModal(q) {
     document.getElementById('q-topic').value = q ? q.topic_id : '';
     document.getElementById('q-text').value = q ? q.text : '';
     document.getElementById('q-image').value = q ? q.image_url : '';
+    document.getElementById('q-edit-image').src = imgUrl(q ? q.image_url : '');
     document.getElementById('q-opt-a').value = q ? q.option_a : '';
     document.getElementById('q-opt-b').value = q ? q.option_b : '';
     document.getElementById('q-opt-c').value = q ? q.option_c : '';
@@ -259,9 +338,63 @@ function showQuestionModal(q) {
     document.getElementById('q-correct').value = q ? q.correct_option : 'A';
     document.getElementById('q-explanation').value = q ? q.explanation : '';
     document.getElementById('q-difficulty').value = q ? q.difficulty : 1;
+    updateCorrectButtons();
 }
 
 function editQuestion(q) { showQuestionModal(q); }
+
+function toggleCorrect(btn) {
+    const opt = btn.dataset.opt;
+    document.getElementById('q-correct').value = opt;
+    updateCorrectButtons();
+}
+
+function updateCorrectButtons() {
+    const correct = document.getElementById('q-correct').value;
+    document.querySelectorAll('.q-correct-toggle').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.opt === correct);
+    });
+}
+
+async function uploadQuestionImage(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(BASE + '/api/admin/upload-image', {
+        method: 'POST',
+        headers: {'Authorization': 'Bearer ' + adminToken},
+        body: formData,
+    });
+    if (!res.ok) { alert('Ошибка загрузки'); return; }
+    const data = await res.json();
+    document.getElementById('q-image').value = data.url;
+    document.getElementById('q-edit-image').src = imgUrl(data.url);
+}
+
+function removeQuestionImage() {
+    document.getElementById('q-image').value = '';
+    document.getElementById('q-edit-image').src = BASE + '/static/placeholder.svg';
+}
+
+async function browseImages() {
+    const res = await fetch(BASE + '/api/admin/images', {headers: headers()});
+    if (!res.ok) return;
+    const images = await res.json();
+    document.getElementById('image-browser-grid').innerHTML = images.map(img => `
+        <div class="image-browser-item" onclick="selectImage('${img.url}')">
+            <img src="${imgUrl(img.url)}" onerror="this.parentElement.style.display='none'">
+            <span>${img.filename}</span>
+        </div>
+    `).join('') || '<p style="color:var(--text-secondary)">Нет загруженных изображений</p>';
+    document.getElementById('image-browser-modal').style.display = 'flex';
+}
+
+function selectImage(url) {
+    document.getElementById('q-image').value = url;
+    document.getElementById('q-edit-image').src = imgUrl(url);
+    document.getElementById('image-browser-modal').style.display = 'none';
+}
 
 async function saveQuestion() {
     const id = document.getElementById('q-id').value;
@@ -288,6 +421,47 @@ async function deleteQuestion(id) {
     if (!confirm('Удалить вопрос?')) return;
     await fetch(`${BASE}/api/admin/questions/${id}`, {method: 'DELETE', headers: headers()});
     loadQuestions();
+}
+
+async function toggleQuestion(id) {
+    await fetch(`${BASE}/api/admin/questions/${id}/toggle`, {method: 'PUT', headers: headers()});
+    loadQuestions();
+}
+
+// --- Placeholder sections ---
+async function loadVotes() {
+    try {
+        const res = await fetch(BASE + '/api/suggestions', {headers: headers()});
+        if (!res.ok) { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Раздел будет доступен после реализации Phase 5</p>'; return; }
+        const items = await res.json();
+        if (!items.length) { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Нет предложенных тем</p>'; return; }
+        document.getElementById('votes-list').innerHTML = items.map(s => `
+            <div class="vote-card">
+                <span class="vote-name">${s.name}</span>
+                <span class="vote-rating">${s.rating > 0 ? '+' : ''}${s.rating}</span>
+                <span class="vote-author">от ${s.suggested_by}</span>
+            </div>
+        `).join('');
+    } catch { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Раздел будет доступен после реализации Phase 5</p>'; }
+}
+
+async function loadTopPlayers() {
+    try {
+        const res = await fetch(BASE + '/api/leaderboard', {headers: headers()});
+        if (!res.ok) { document.getElementById('top-list').innerHTML = '<p style="color:var(--text-secondary)">Нет данных</p>'; return; }
+        const players = await res.json();
+        if (!players.length) { document.getElementById('top-list').innerHTML = '<p style="color:var(--text-secondary)">Нет игроков</p>'; return; }
+        document.getElementById('top-list').innerHTML = `
+            <table class="admin-table">
+                <tr><th>#</th><th>Игрок</th><th>Очки</th><th>Игр</th></tr>
+                ${players.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.total_score}</td><td>${p.games_played}</td></tr>`).join('')}
+            </table>
+        `;
+    } catch { document.getElementById('top-list').innerHTML = '<p style="color:var(--text-secondary)">Нет данных</p>'; }
+}
+
+async function loadUsers() {
+    document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Раздел будет доступен позже</p>';
 }
 
 function showError(elId, msg) {

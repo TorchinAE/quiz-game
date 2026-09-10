@@ -262,6 +262,27 @@ async def broadcast_reveal_to_room(room_code: str):
         )
         answers = ans_result.scalars().all()
 
+        # Calculate and persist scores for correct answers (deferred scoring)
+        correct_teams = set()
+        for a in answers:
+            if a.is_correct:
+                correct_teams.add(a.team)
+
+        for team in correct_teams:
+            team_members_result = await db.execute(
+                select(RoomMember).where(
+                    RoomMember.room_id == room.id,
+                    RoomMember.team == team,
+                    RoomMember.role == "player",
+                )
+            )
+            for tm in team_members_result.scalars().all():
+                tm.score += q.difficulty
+                db.add(tm)
+
+        if correct_teams:
+            await db.commit()
+
         answer_details = []
         for a in answers:
             m_result = await db.execute(select(RoomMember).where(RoomMember.id == a.room_member_id))
