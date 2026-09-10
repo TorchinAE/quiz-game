@@ -39,6 +39,8 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def verify_admin(username: str, password: str) -> bool:
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        return False
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
 

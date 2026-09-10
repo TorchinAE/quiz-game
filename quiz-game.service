@@ -1,0 +1,21 @@
+[Unit]
+Description=Quiz Game FastAPI application
+After=network.target
+
+[Service]
+Type=simple
+User=mi
+Group=mi
+
+WorkingDirectory=/home/mi/quiz-game
+
+Environment="PATH=/home/mi/quiz-game/venv/bin"
+EnvironmentFile=/home/mi/quiz-game/.env
+
+ExecStart=/home/mi/quiz-game/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080
+
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

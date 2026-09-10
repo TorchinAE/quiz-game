@@ -10,3 +10,4 @@ coverage.xml
 .idea/
 data/*.db
 data/test_quiz.db
+.env

@@ -46,7 +46,7 @@
         <div id="create-room-section" style="display:none">
             <div class="card" style="margin-bottom:20px">
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                    <input type="text" id="new-room-name" placeholder="Название комнаты (необязательно)" maxlength="200" style="flex:1;min-width:200px">
+                    <input type="text" id="new-room-name" placeholder="Название комнаты (необязательно)" maxlength="200" style="flex:1;min-width:200px;margin-bottom:0">
                     <button class="btn btn-success" onclick="createRoom()">+ Создать</button>
                 </div>
             </div>
@@ -374,6 +374,7 @@ async function suggestTopic() {
         }
         input.value = '';
         loadSuggestions();
+        showToast('Предложение отправлено!', 'success');
     } catch(e) { alert('Ошибка сети'); }
 }
 
@@ -397,6 +398,16 @@ async function voteSuggestion(id, vote) {
         }
         loadSuggestions();
     } catch(e) { alert('Ошибка сети'); }
+}
+
+// --- Toast ---
+function showToast(msg, type) {
+    const toast = document.createElement('div');
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;font-size:1em;font-weight:600;z-index:1000;color:#fff;box-shadow:0 4px 15px rgba(0,0,0,0.3);transition:opacity 0.3s';
+    toast.style.background = type === 'success' ? 'linear-gradient(135deg,#00b894,#00a381)' : '#e94560';
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
 // --- Error ---
