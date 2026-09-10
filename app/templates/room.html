@@ -89,6 +89,26 @@
 const token = localStorage.getItem('quiz_token');
 const playerData = JSON.parse(localStorage.getItem('quiz_player') || 'null');
 const ROOM_CODE = '{{ room_code }}';
+
+async function fetchAuth(url, options) {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+        localStorage.removeItem('quiz_token');
+        localStorage.removeItem('quiz_player');
+        showToast('Сессия истекла, войдите заново', 'error');
+        setTimeout(() => { window.location.href = BASE + '/'; }, 1500);
+    }
+    return res;
+}
+
+function showToast(msg, type) {
+    const toast = document.createElement('div');
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;font-size:1em;font-weight:600;z-index:1000;color:#fff;box-shadow:0 4px 15px rgba(0,0,0,0.3);transition:opacity 0.3s';
+    toast.style.background = type === 'success' ? 'linear-gradient(135deg,#00b894,#00a381)' : '#e94560';
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
 let ws = null;
 let timerInterval = null;
 let currentQuestion = null;
@@ -294,17 +314,17 @@ async function loadTopics(selectedId) {
 
 async function startGame() {
     const topicId = parseInt(document.getElementById('topic-select').value);
-    if (!topicId) return alert('Выберите тему');
+    if (!topicId) return showToast('Выберите тему', 'error');
     try {
-        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/start`, {
+        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/start`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({topic_id: topicId})
         });
         const data = await res.json();
-        if (!res.ok) return alert(data.detail);
+        if (!res.ok) return showToast(data.detail, 'error');
         await nextQuestion();
-    } catch(e) { alert('Ошибка сети'); }
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 
 // --- Question ---
@@ -443,7 +463,7 @@ async function submitAnswer() {
     answered = true;
 
     try {
-        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/answer`, {
+        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/answer`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -454,7 +474,6 @@ async function submitAnswer() {
         const data = await res.json();
         if (!res.ok) {
             answered = false;
-            // Don't alert on timer expiry — just log
             console.log('Answer rejected:', data.detail);
         }
     } catch(e) {
@@ -502,7 +521,7 @@ async function nextQuestion() {
     nextQuestionInFlight = true;
     clearTimeout(revealTimeout);
     try {
-        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/next`, {
+        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/next`, {
             method: 'POST',
             headers: {'Authorization': 'Bearer ' + token}
         });
@@ -562,7 +581,7 @@ async function editNickname() {
     const newNick = prompt('Новый никнейм:', playerData ? playerData.nickname : '');
     if (!newNick || !newNick.trim()) return;
     try {
-        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/nickname`, {
+        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/nickname`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -571,20 +590,19 @@ async function editNickname() {
             body: JSON.stringify({nickname: newNick.trim()})
         });
         const data = await res.json();
-        if (!res.ok) { alert(data.detail); return; }
-        // Update local state
+        if (!res.ok) { showToast(data.detail, 'error'); return; }
         if (playerData) {
             playerData.nickname = data.nickname;
             localStorage.setItem('quiz_player', JSON.stringify(playerData));
         }
         loadState();
-    } catch(e) { alert('Ошибка сети'); }
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 
 // --- Leave ---
 async function leaveRoom() {
     try {
-        await fetch(`${BASE}/api/rooms/${ROOM_CODE}/leave`, {
+        await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/leave`, {
             method: 'POST',
             headers: {'Authorization': 'Bearer ' + token}
         });
