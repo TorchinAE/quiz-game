@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Квиз-Игра — Лобби{% endblock %}
+{% block title %}Квиз-Тендер — Лобби{% endblock %}
 {% block content %}
 <div class="lobby-layout">
     <!-- Main area -->
     <div class="lobby-main">
         <div class="lobby-header">
-            <h1>Квиз-Игра</h1>
+            <h1>Квиз-Тендер</h1>
             <div class="lobby-auth-bar" id="auth-bar"></div>
         </div>
 
@@ -62,7 +62,7 @@
             </div>
             <!-- Topic cards -->
             <div id="topic-cards-wrap" style="margin-bottom:20px">
-                <h3 style="color:var(--color-primary);margin-bottom:12px">Темы для игры</h3>
+                <h3 style="color:var(--color-primary);margin-bottom:12px">Темы для тендера</h3>
                 <div id="topic-cards" class="topic-cards-grid"></div>
             </div>
         </div>
@@ -87,7 +87,7 @@
         </div>
         <!-- Leaderboard -->
         <div class="sidebar-section">
-            <h3>🏆 Топ-5 игроков</h3>
+            <h3>🏆 Топ-5 участников</h3>
             <div id="leaderboard-list">
                 <div class="leaderboard-empty">Пока нет зарегистрированных игроков</div>
             </div>
@@ -242,7 +242,7 @@ async function loadRooms() {
         noRooms.style.display = 'none';
 
         container.innerHTML = rooms.map(r => {
-            const statusText = r.status === 'waiting' ? 'Ожидание игроков' : 'Игра идёт';
+            const statusText = r.status === 'waiting' ? 'Ожидание участников' : 'Тендер идёт';
             const statusClass = r.status === 'waiting' ? 'status-waiting' : 'status-active';
             return `
                 <div class="card room-card">

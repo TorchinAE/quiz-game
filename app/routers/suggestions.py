@@ -4,7 +4,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_player
-from app.config import TELEGRAM_ADMIN_ID
 from app.database import get_db
 from app.models import SuggestedTopic, TopicVote
 

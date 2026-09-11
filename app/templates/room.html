@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Комната — Квиз-Игра{% endblock %}
+{% block title %}Комната — Квиз-Тендер{% endblock %}
 {% block content %}
 <div id="game-area">
     <!-- Top bar -->
@@ -75,7 +75,7 @@
 
     <!-- Finished card -->
     <div class="card" id="finished-card" style="display:none">
-        <h2>Игра окончена!</h2>
+        <h2>Тендер окончен!</h2>
         <div id="final-results"></div>
         <div style="text-align:center;margin-top:20px">
             <a href="/quiz/" class="btn btn-secondary">Выйти в лобби</a>
@@ -239,7 +239,7 @@ async function loadState() {
         // Show room name
         const roomName = state.name || ROOM_CODE;
         document.getElementById('lobby-title').textContent = roomName;
-        document.title = `${roomName} — Квиз-Игра`;
+        document.title = `${roomName} — Квиз-Тендер`;
 
         if (state.status === 'waiting') {
             showSection('waiting-section');

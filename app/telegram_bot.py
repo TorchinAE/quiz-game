@@ -370,8 +370,8 @@ async def handle_edit_text(update, context):
     topic_id = pending["topic_id"]
 
     try:
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         from sqlalchemy import select
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         from app.database import async_session
         from app.models import SuggestedTopic

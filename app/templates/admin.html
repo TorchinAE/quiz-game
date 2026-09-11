@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Квиз-Игра — Админка{% endblock %}
+{% block title %}Квиз-Тендер — Админка{% endblock %}
 {% block content %}
 <div id="login-section" class="card" style="max-width:400px;margin:80px auto">
     <h2 style="color:var(--color-primary)">Вход администратора</h2>
@@ -19,7 +19,7 @@
             <button class="admin-nav-btn active" data-section="topics" onclick="showSection('topics')">Темы</button>
             <button class="admin-nav-btn" data-section="questions" onclick="showSection('questions')">Вопросы</button>
             <button class="admin-nav-btn" data-section="votes" onclick="showSection('votes')">Голосования</button>
-            <button class="admin-nav-btn" data-section="top" onclick="showSection('top')">Топ-игроки</button>
+            <button class="admin-nav-btn" data-section="top" onclick="showSection('top')">Топ-участники</button>
             <button class="admin-nav-btn" data-section="users" onclick="showSection('users')">Пользователи</button>
             <button class="admin-nav-btn" data-section="stats" onclick="showSection('stats')">Статистика</button>
             <button class="admin-nav-btn" data-section="backup" onclick="showSection('backup')">Бэкап</button>
@@ -63,7 +63,7 @@
             <!-- Top Players Section -->
             <section id="sec-top" class="admin-section" style="display:none">
                 <div class="admin-section-header">
-                    <h2>Топ-игроки</h2>
+                    <h2>Топ-участники</h2>
                 </div>
                 <div id="top-list"></div>
             </section>
@@ -87,7 +87,7 @@
                     <canvas id="visits-chart" height="200"></canvas>
                 </div>
                 <div style="margin-top:20px">
-                    <h3 style="margin-bottom:10px">Игры (30 дней)</h3>
+                    <h3 style="margin-bottom:10px">Тендеры (30 дней)</h3>
                     <canvas id="games-chart" height="200"></canvas>
                 </div>
             </section>
@@ -484,10 +484,10 @@ async function loadTopPlayers() {
         const res = await fetch(BASE + '/api/leaderboard', {headers: headers()});
         if (!res.ok) { document.getElementById('top-list').innerHTML = '<p style="color:var(--text-secondary)">Нет данных</p>'; return; }
         const players = await res.json();
-        if (!players.length) { document.getElementById('top-list').innerHTML = '<p style="color:var(--text-secondary)">Нет игроков</p>'; return; }
+        if (!players.length) { document.getElementById('top-list').innerHTML = '<p style="color:var(--text-secondary)">Нет участников</p>'; return; }
         document.getElementById('top-list').innerHTML = `
             <table class="admin-table">
-                <tr><th>#</th><th>Игрок</th><th>Очки</th><th>Игр</th></tr>
+                <tr><th>#</th><th>Участник</th><th>Очки</th><th>Тендеров</th></tr>
                 ${players.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.total_score}</td><td>${p.games_played}</td></tr>`).join('')}
             </table>
         `;
@@ -513,11 +513,11 @@ async function loadStats() {
         const s = await res.json();
         document.getElementById('stats-summary').innerHTML = `
             <div class="stat-card"><div class="stat-value">${s.total_visits}</div><div class="stat-label">Посещений</div></div>
-            <div class="stat-card"><div class="stat-value">${s.unique_players}</div><div class="stat-label">Уникальных игроков</div></div>
+            <div class="stat-card"><div class="stat-value">${s.unique_players}</div><div class="stat-label">Уникальных участников</div></div>
             <div class="stat-card"><div class="stat-value">${s.total_rooms}</div><div class="stat-label">Всего комнат</div></div>
             <div class="stat-card"><div class="stat-value">${s.active_rooms}</div><div class="stat-label">Активных комнат</div></div>
             <div class="stat-card"><div class="stat-value">${s.total_players}</div><div class="stat-label">Зарегистрировано</div></div>
-            <div class="stat-card"><div class="stat-value">${s.total_games_finished}</div><div class="stat-label">Игр завершено</div></div>
+            <div class="stat-card"><div class="stat-value">${s.total_games_finished}</div><div class="stat-label">Тендеров завершено</div></div>
         `;
     } catch {}
 
@@ -561,7 +561,7 @@ async function loadStats() {
                 data: {
                     labels: data.map(d => d.date),
                     datasets: [{
-                        label: 'Игры',
+                        label: 'Тендеры',
                         data: data.map(d => d.count),
                         backgroundColor: '#00b894',
                     }]
