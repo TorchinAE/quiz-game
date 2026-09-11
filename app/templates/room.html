@@ -62,9 +62,6 @@
         <img class="question-image" id="q-image" referrerpolicy="no-referrer" crossorigin="anonymous">
         <div class="question-text" id="q-text"></div>
         <div class="options-grid" id="options"></div>
-        <div id="submit-answer-wrap" style="text-align:center;margin-top:15px;display:none">
-            <button class="btn btn-primary" id="submit-answer-btn" onclick="submitAnswer()">Ответить</button>
-        </div>
     </div>
 
     <!-- Reveal card -->
@@ -476,13 +473,11 @@ function selectOption(key) {
     });
     document.getElementById('opt-' + key).classList.add('selected');
     selectedOption = key;
-    document.getElementById('submit-answer-wrap').style.display = 'block';
 }
 
 async function submitAnswer() {
     if (!selectedOption || !currentQuestion || answered) return;
     answered = true;
-    document.getElementById('submit-answer-wrap').style.display = 'none';
     disableOptions();
 
     try {

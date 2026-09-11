@@ -1,108 +1,80 @@
-# Quiz Game — Project Guide
+# Quiz Game — Agent Guide
 
-## Overview
+## What it is
 
-Multiplayer quiz game built with **FastAPI** + **WebSocket** + **SQLAlchemy (async)**. Players join rooms by code, form teams (A vs B, up to 4 per team), and answer 12 timed questions per game. Includes admin panel, Telegram bot integration, and auto-backup.
+Multiplayer quiz game. FastAPI + SQLAlchemy async + SQLite + Jinja2 + WebSocket. Russian UI, dark theme. Running behind nginx at `/quiz/` on port 8080.
 
-## Tech Stack
+## Commands
 
-- **Python 3.12+**, FastAPI, Uvicorn
-- **SQLAlchemy 2.0** (async) + **aiosqlite** (SQLite)
-- **Jinja2** templates + vanilla CSS (no frontend framework)
-- **WebSocket** for real-time game state
-- **JWT** auth (python-jose + bcrypt/passlib)
-- **pytest** + pytest-asyncio + httpx for testing
-- **Ruff** for linting (line-length 120, target py312)
+```bash
+# Activate venv first
+source venv/bin/activate
+
+# Lint + format (REQUIRED before every commit and push)
+ruff check app/ --fix
+ruff format .
+
+# Run tests
+pytest -x -q
+pytest tests/test_auth.py -x -q          # single file
+pytest tests/test_auth.py::test_name -x  # single test
+
+# Start server
+python run.py                             # port 8080 (QUIZ_PORT)
+```
+
+**CI runs `ruff check .` and `ruff format --check .` on push to `quiz-game`.** Fix all lint/format errors before pushing or CI fails.
 
 ## Architecture
 
-```
-app/
-  main.py           — FastAPI app, lifespan (DB init, CSV load, inactivity checker, Telegram bot, auto-backup)
-  config.py         — All settings (env vars + constants)
-  database.py       — Async SQLAlchemy engine + session factory
-  models.py         — All SQLAlchemy models (Topic, Question, Game, Team, Player, Room, RoomMember, RoomAnswer, etc.)
-  auth.py           — JWT helpers, password hashing, admin/team/player auth dependencies
-  telegram_bot.py   — Telegram bot integration
-  backup.py         — Auto-backup to remote server
-  routers/
-    auth_router.py  — Player registration/login, guest login, team registration (legacy)
-    rooms.py        — Room CRUD, join/leave, start game, submit answer, next question
-    game.py         — Legacy global game endpoints (team-based, pre-rooms)
-    ws.py           — WebSocket endpoints (/ws/game, /ws/room/{code}) + broadcast helpers
-    admin.py        — Admin CRUD (topics, questions, images), stats, backup
-    leaderboard.py  — Player leaderboard (top 5)
-    suggestions.py  — Topic suggestions with voting
-  templates/        — Jinja2 HTML templates (lobby, room, game, admin, results, base)
-  static/           — CSS
-data/
-  questions.csv     — Seed questions loaded on first startup
-pictures/           — Uploaded question images (served at /pictures/)
-tests/              — pytest test suite
-```
+Two game systems coexist:
+- **Rooms** (`routers/rooms.py`) — active. Room codes, teams A/B, WebSocket real-time. Models: `Room`, `RoomMember`, `RoomAnswer`.
+- **Legacy** (`routers/game.py`) — old global game. Models: `Game`, `Team`, `TeamAnswer`. Still in codebase.
 
-## Two Game Systems
+Shared: `Topic` + `Question` question bank, loaded from `data/questions.csv` on first startup.
 
-1. **Legacy (game.py)** — Global game with 2 teams, admin-controlled. Uses `Game`, `Team`, `TeamAnswer` models.
-2. **Rooms (rooms.py)** — Room-based with invite codes. Uses `Room`, `RoomMember`, `RoomAnswer` models. This is the active system.
+Key files:
+- `app/main.py` — lifespan (DB init, CSV load, inactivity checker, bot, backup), middleware, page routes
+- `app/config.py` — all settings from env vars. Admin creds from `QUIZ_ADMIN_USERNAME`/`QUIZ_ADMIN_PASSWORD`
+- `app/auth.py` — JWT create/verify, `get_current_player`/`get_current_team`/`verify_admin` dependencies
+- `app/routers/ws.py` — WebSocket `/ws/room/{code}`, `broadcast_*` helpers for room events
+- `app/database.py` — async engine, `init_db()` with inline migrations (ALTER TABLE if column missing)
+- `app/templates/lobby.html` — main page, auth, room list, create room, topic cards, suggestions
+- `app/templates/room.html` — game room, timer, answer, reveal, WebSocket events
 
-Both share the same question bank (`Topic` + `Question`).
+## Key patterns
 
-## Key Patterns
+- All DB access async: `async_session()` or `get_db` dependency
+- `utcnow()` strips timezone for SQLite compatibility
+- Scoring is deferred: answers stored on submit, scores calculated on reveal in `broadcast_reveal_to_room`
+- Questions have difficulty 1-3; score = difficulty points per correct answer
+- `fetchAuth(url, options)` in templates — wraps fetch, auto-logout on 401
+- `showToast(msg, type)` — floating notification (success/error)
+- Room inactivity auto-closes after 60s (`ROOM_INACTIVITY_TIMEOUT_SECONDS`)
+- `loadState()` called on page load (not just on WebSocket open)
+- Answer is auto-submitted when timer expires (no manual submit button)
 
-- All DB access is async via `async_session()` context manager or `get_db` dependency
-- Auth uses Bearer tokens in `Authorization` header; admin also accepts `admin_token` cookie
-- WebSocket broadcasts: `broadcast_*` functions in `ws.py` push state to all connected clients in a room
-- `utcnow()` helper strips timezone for SQLite compatibility
-- Questions have difficulty 1-3, scoring is `difficulty` points per correct answer (deferred scoring on reveal in rooms)
-- Room inactivity auto-closes rooms after 60 seconds (configurable)
+## Secrets & deploy
 
-## Running
+- Admin creds: `QUIZ_ADMIN_USERNAME`, `QUIZ_ADMIN_PASSWORD` in `.env` (not in repo, in `.gitignore`)
+- Systemd service: `/etc/systemd/system/quiz-game.service` with `EnvironmentFile=/home/mi/quiz-game/.env`
+- CI workflow (`.github/workflows/ci.yml`) writes GitHub Secrets to `.env` on deploy via SSH
+- `quiz-game.service` file in repo root — copied to systemd on deploy
 
-```bash
-pip install -r requirements.txt
-python run.py          # Starts on port 8080 (configurable via QUIZ_PORT)
-```
+## Nginx
 
-## Environment Variables
+Config at `nginx/quiz-game.conf`, deployed to `/etc/nginx/sites-available/`. Proxies `/quiz/` → `http://127.0.0.1:8080/`. WebSocket headers + 86400s timeout. Static: `/quiz/static/` and `/quiz/pictures/` proxied separately.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `QUIZ_PORT` | `8080` | Server port |
-| `QUIZ_SECRET_KEY` | `super-secret-quiz-key-2024` | JWT secret |
-| `QUIZ_DATABASE_URL` | `sqlite+aiosqlite:///./data/quiz.db` | DB URL |
-| `QUIZ_TELEGRAM_BOT_TOKEN` | (empty) | Telegram bot token |
-| `QUIZ_TELEGRAM_ADMIN_ID` | (empty) | Telegram admin chat ID |
-| `QUIZ_BACKUP_*` | (empty) | Backup server config |
+## Testing quirks
 
-## Testing
+- `conftest.py` sets env vars for test DB and admin creds before importing app
+- Test DB: `data/test_quiz.db` — auto-created/dropped per test via `create_all`/`drop_all`
+- Delete stale test DB manually if schema changes: `rm data/test_quiz.db`
+- `asyncio_mode = "auto"` in pyproject.toml — no need for `@pytest.mark.asyncio` decorator
 
-```bash
-pytest                 # Run all tests
-pytest --cov=app      # With coverage
-```
+## Gotchas
 
-Tests use `conftest.py` fixtures for async DB setup. Test files mirror routers: `test_rooms.py`, `test_game.py`, `test_admin.py`, `test_auth.py`, `test_ws.py`, etc.
-
-## Linting
-
-```bash
-ruff check app/        # Lint
-ruff format app/       # Format
-```
-
-Config in `pyproject.toml`: rules E, F, I, W; line-length 120; target py312.
-
-## Admin Access
-
-Hardcoded credentials in `config.py`: username `k2k1`, password `123123`. Admin panel at `/admin`.
-
-## Important Notes
-
-- CSV questions are auto-loaded on first startup if DB is empty
-- Room codes are 6-char uppercase alphanumeric
-- Images stored in `pictures/`, max 5MB, allowed: jpg/jpeg/png/gif/webp/svg
-- Telegram bot starts only if `QUIZ_TELEGRAM_BOT_TOKEN` is set
-- Auto-backup runs every 7 days (configurable via `QUIZ_BACKUP_INTERVAL_DAYS`)
-- No-cache middleware applied to all responses
-- Visit tracking middleware logs HTML page visits
+- `navigator.clipboard` doesn't work on HTTP — use textarea+execCommand fallback for copy
+- QR codes generated via `api.qrserver.com` (external API, no deps)
+- Private rooms filtered from public list (`Room.is_private == False`)
+- `SECRET_KEY` default is insecure — must be set via env var in production
