@@ -62,6 +62,9 @@
         <img class="question-image" id="q-image" referrerpolicy="no-referrer" crossorigin="anonymous">
         <div class="question-text" id="q-text"></div>
         <div class="options-grid" id="options"></div>
+        <div id="submit-answer-wrap" style="text-align:center;margin-top:15px;display:none">
+            <button class="btn btn-primary" id="submit-answer-btn" onclick="submitAnswer()">Ответить</button>
+        </div>
     </div>
 
     <!-- Reveal card -->
@@ -357,6 +360,7 @@ function showQuestion(q) {
 
     showSection('question-card');
     document.getElementById('scores-bar').style.display = 'flex';
+    document.getElementById('submit-answer-wrap').style.display = 'none';
 
     document.getElementById('q-counter').textContent = `Вопрос ${q.index} из ${q.total}`;
     const diffEl = document.getElementById('q-difficulty');
@@ -473,11 +477,14 @@ function selectOption(key) {
     });
     document.getElementById('opt-' + key).classList.add('selected');
     selectedOption = key;
+    document.getElementById('submit-answer-wrap').style.display = 'block';
 }
 
 async function submitAnswer() {
     if (!selectedOption || !currentQuestion || answered) return;
     answered = true;
+    document.getElementById('submit-answer-wrap').style.display = 'none';
+    disableOptions();
 
     try {
         const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/answer`, {
@@ -488,13 +495,21 @@ async function submitAnswer() {
             },
             body: JSON.stringify({question_id: currentQuestion.id, option: selectedOption})
         });
-        const data = await res.json();
-        if (!res.ok) {
+        if (res.ok) {
+            const data = await res.json();
+            if (data.is_correct) {
+                showToast('Правильно!', 'success');
+            } else {
+                showToast('Неправильно', 'error');
+            }
+        } else {
+            const data = await res.json().catch(() => ({}));
             answered = false;
-            console.log('Answer rejected:', data.detail);
+            showToast(data.detail || 'Ошибка отправки ответа', 'error');
         }
     } catch(e) {
         answered = false;
+        showToast('Ошибка сети', 'error');
     }
 }
 
