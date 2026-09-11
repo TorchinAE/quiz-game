@@ -49,6 +49,6 @@ async def init_db():
         result = await conn.execute(text("PRAGMA table_info(suggested_topics)"))
         columns = [row[1] for row in result.fetchall()]
         if "status" not in columns:
-            await conn.execute(text(
-                "ALTER TABLE suggested_topics ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'approved'"
-            ))
+            await conn.execute(
+                text("ALTER TABLE suggested_topics ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'approved'")
+            )

@@ -20,9 +20,7 @@ class VoteRequest(BaseModel):
 
 @router.get("")
 async def list_suggestions(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(SuggestedTopic).where(SuggestedTopic.status == "approved")
-    )
+    result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.status == "approved"))
     topics = result.scalars().all()
 
     items = []

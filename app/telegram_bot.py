@@ -66,6 +66,7 @@ def _is_admin(update) -> bool:
 
 # --- Commands ---
 
+
 async def cmd_start(update, context):
     if not _is_admin(update):
         await update.message.reply_text("Access denied.")
@@ -197,13 +198,15 @@ async def cmd_pending(update, context):
 
         for t in topics:
             text = f"📝 «{t.name}»\nот {t.suggested_by}"
-            keyboard = InlineKeyboardMarkup([
+            keyboard = InlineKeyboardMarkup(
                 [
-                    InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{t.id}"),
-                    InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{t.id}"),
-                    InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{t.id}"),
+                    [
+                        InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{t.id}"),
+                        InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{t.id}"),
+                        InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{t.id}"),
+                    ]
                 ]
-            ])
+            )
             await update.message.reply_text(text, reply_markup=keyboard)
     except Exception:
         await update.message.reply_text("Ошибка получения тем")
@@ -226,6 +229,7 @@ async def cmd_backup(update, context):
 
 # --- Suggestion notification & inline buttons ---
 
+
 async def notify_suggestion_pending(topic_id: int, name: str, suggested_by: str):
     """Send new suggestion to admin with approve/edit/reject buttons."""
     if not _bot or not TELEGRAM_ADMIN_ID:
@@ -234,13 +238,15 @@ async def notify_suggestion_pending(topic_id: int, name: str, suggested_by: str)
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         text = f"💡 Новая предложенная тема:\n\n«{name}»\nот {suggested_by}"
-        keyboard = InlineKeyboardMarkup([
+        keyboard = InlineKeyboardMarkup(
             [
-                InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{topic_id}"),
-                InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{topic_id}"),
-                InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{topic_id}"),
+                [
+                    InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{topic_id}"),
+                    InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{topic_id}"),
+                    InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{topic_id}"),
+                ]
             ]
-        ])
+        )
         await _bot.send_message(
             chat_id=TELEGRAM_ADMIN_ID,
             text=text,
@@ -347,8 +353,7 @@ async def _do_edit_start(query, topic_id: int):
     _pending_edits[chat_id] = {"topic_id": topic_id, "message_id": query.message.message_id}
 
     await query.edit_message_text(
-        f"✏️ Текущая формулировка:\n«{current_name}»\n\n"
-        f"Отправьте новый текст темы (или /cancel для отмены):"
+        f"✏️ Текущая формулировка:\n«{current_name}»\n\nОтправьте новый текст темы (или /cancel для отмены):"
     )
 
 
@@ -387,18 +392,17 @@ async def handle_edit_text(update, context):
             topic.name = text
             await db.commit()
 
-        keyboard = InlineKeyboardMarkup([
+        keyboard = InlineKeyboardMarkup(
             [
-                InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{topic_id}"),
-                InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{topic_id}"),
-                InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{topic_id}"),
+                [
+                    InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{topic_id}"),
+                    InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{topic_id}"),
+                    InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{topic_id}"),
+                ]
             ]
-        ])
+        )
         await update.message.reply_text(
-            f"✏️ Формулировка обновлена:\n\n"
-            f"Было: «{old_name}»\n"
-            f"Стало: «{text}»\n\n"
-            f"Что сделать с темой?",
+            f"✏️ Формулировка обновлена:\n\nБыло: «{old_name}»\nСтало: «{text}»\n\nЧто сделать с темой?",
             reply_markup=keyboard,
         )
     except Exception:
@@ -406,6 +410,7 @@ async def handle_edit_text(update, context):
 
 
 # --- Notification functions ---
+
 
 async def notify_new_topic(topic_name: str):
     """Send notification when a new topic is created."""
