@@ -276,3 +276,23 @@ jobs:
             echo "======================================"
             echo "Deploy complete!"
             echo "======================================"
+
+      - name: Notify Telegram
+        if: success()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.QUIZ_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.QUIZ_TELEGRAM_ADMIN_ID }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          # Take first line of commit message, escape for JSON
+          FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1 | sed 's/\\/\\\\/g; s/"/\\"/g')
+          TEXT="✅ Деплой успешен%0A📦 quiz-game | \`${SHORT_SHA}\`%0A💬 ${FIRST_LINE}"
+
+          curl -s -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${TEXT}" \
+            -d parse_mode="Markdown" \
+            > /dev/null
