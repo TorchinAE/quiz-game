@@ -164,6 +164,7 @@ function connectWS() {
 
     ws.onclose = () => { setTimeout(connectWS, 2000); };
 }
+loadState();
 connectWS();
 
 function onWSQuestion(q) {
