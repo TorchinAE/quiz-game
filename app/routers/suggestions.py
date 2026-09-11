@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_player
+from app.config import TELEGRAM_ADMIN_ID
 from app.database import get_db
 from app.models import SuggestedTopic, TopicVote
 
@@ -20,7 +21,9 @@ class VoteRequest(BaseModel):
 
 @router.get("")
 async def list_suggestions(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(SuggestedTopic))
+    result = await db.execute(
+        select(SuggestedTopic).where(SuggestedTopic.status == "approved")
+    )
     topics = result.scalars().all()
 
     items = []
@@ -57,11 +60,21 @@ async def create_suggestion(
         name=name,
         suggested_by=player.get("nickname", "Unknown"),
         player_id=player.get("player_id"),
+        status="pending",
     )
     db.add(topic)
     await db.commit()
     await db.refresh(topic)
-    return {"id": topic.id, "name": topic.name}
+
+    # Notify admin via Telegram
+    try:
+        from app.telegram_bot import notify_suggestion_pending
+
+        await notify_suggestion_pending(topic.id, topic.name, topic.suggested_by)
+    except Exception:
+        pass
+
+    return {"id": topic.id, "name": topic.name, "status": topic.status}
 
 
 @router.post("/{topic_id}/vote")
@@ -77,6 +90,8 @@ async def vote_suggestion(
     result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
     topic = result.scalar_one_or_none()
     if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    if topic.status != "approved":
         raise HTTPException(status_code=404, detail="Topic not found")
 
     nickname = player.get("nickname", "Unknown")
@@ -98,3 +113,57 @@ async def vote_suggestion(
     db.add(vote)
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/{topic_id}/approve")
+async def approve_suggestion(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+    topic = result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    topic.status = "approved"
+    await db.commit()
+    return {"ok": True, "status": "approved"}
+
+
+@router.post("/{topic_id}/reject")
+async def reject_suggestion(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+    topic = result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    topic.status = "rejected"
+    await db.commit()
+    return {"ok": True, "status": "rejected"}
+
+
+class EditRequest(BaseModel):
+    name: str
+
+
+@router.put("/{topic_id}")
+async def edit_suggestion(
+    topic_id: int,
+    req: EditRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    name = req.name.strip()
+    if not name or len(name) > 120:
+        raise HTTPException(status_code=400, detail="Название должно быть от 1 до 120 символов")
+
+    result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+    topic = result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    topic.name = name
+    await db.commit()
+    return {"ok": True, "name": topic.name}

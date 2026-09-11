@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 _bot = None
 _bot_app = None
 
+# Track admin edit flow: {admin_chat_id: {"topic_id": int, "message_id": int}}
+_pending_edits: dict[int, dict] = {}
+
 
 async def start_bot():
     """Start the telegram bot as a background task."""
@@ -19,7 +22,7 @@ async def start_bot():
 
     try:
         from telegram import Bot
-        from telegram.ext import Application, CommandHandler
+        from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
         _bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
@@ -28,7 +31,10 @@ async def start_bot():
         _bot_app.add_handler(CommandHandler("stats", cmd_stats))
         _bot_app.add_handler(CommandHandler("top", cmd_top))
         _bot_app.add_handler(CommandHandler("votes", cmd_votes))
+        _bot_app.add_handler(CommandHandler("pending", cmd_pending))
         _bot_app.add_handler(CommandHandler("backup", cmd_backup))
+        _bot_app.add_handler(CallbackQueryHandler(handle_suggestion_callback, pattern=r"^suggest_"))
+        _bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_edit_text))
 
         await _bot_app.initialize()
         await _bot_app.start()
@@ -58,6 +64,8 @@ def _is_admin(update) -> bool:
     return str(update.effective_user.id) == str(TELEGRAM_ADMIN_ID)
 
 
+# --- Commands ---
+
 async def cmd_start(update, context):
     if not _is_admin(update):
         await update.message.reply_text("Access denied.")
@@ -67,8 +75,11 @@ async def cmd_start(update, context):
         "Доступные команды:\n"
         "/stats — статистика\n"
         "/top — топ игроков\n"
-        "/votes — предложенные темы\n"
-        "/backup — создать бэкап"
+        "/votes — темы на голосовании\n"
+        "/pending — темы на модерации\n"
+        "/backup — создать бэкап\n\n"
+        "Предложенные темы приходят сюда автоматически.\n"
+        "Используйте кнопки для одобрения/правки/отклонения."
     )
 
 
@@ -141,6 +152,7 @@ async def cmd_votes(update, context):
                     func.coalesce(func.sum(TopicVote.vote), 0).label("rating"),
                 )
                 .outerjoin(TopicVote)
+                .where(SuggestedTopic.status == "approved")
                 .group_by(SuggestedTopic.id)
                 .order_by(func.coalesce(func.sum(TopicVote.vote), 0).desc())
                 .limit(10)
@@ -148,16 +160,53 @@ async def cmd_votes(update, context):
             rows = result.all()
 
         if not rows:
-            await update.message.reply_text("Нет предложенных тем")
+            await update.message.reply_text("Нет тем на голосовании")
             return
 
-        lines = ["Предложенные темы\n"]
+        lines = ["Темы на голосовании\n"]
         for name, author, rating in rows:
             sign = "+" if rating > 0 else ""
             lines.append(f"{sign}{rating} — {name} (от {author})")
         await update.message.reply_text("\n".join(lines))
     except Exception:
         await update.message.reply_text("Ошибка получения голосований")
+
+
+async def cmd_pending(update, context):
+    if not _is_admin(update):
+        return
+    try:
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models import SuggestedTopic
+
+        async with async_session() as db:
+            result = await db.execute(
+                select(SuggestedTopic)
+                .where(SuggestedTopic.status == "pending")
+                .order_by(SuggestedTopic.created_at.desc())
+            )
+            topics = result.scalars().all()
+
+        if not topics:
+            await update.message.reply_text("Нет тем на модерации")
+            return
+
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        for t in topics:
+            text = f"📝 «{t.name}»\nот {t.suggested_by}"
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{t.id}"),
+                    InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{t.id}"),
+                    InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{t.id}"),
+                ]
+            ])
+            await update.message.reply_text(text, reply_markup=keyboard)
+    except Exception:
+        await update.message.reply_text("Ошибка получения тем")
 
 
 async def cmd_backup(update, context):
@@ -174,6 +223,189 @@ async def cmd_backup(update, context):
     except Exception as e:
         await update.message.reply_text(f"Ошибка бэкапа: {e}")
 
+
+# --- Suggestion notification & inline buttons ---
+
+async def notify_suggestion_pending(topic_id: int, name: str, suggested_by: str):
+    """Send new suggestion to admin with approve/edit/reject buttons."""
+    if not _bot or not TELEGRAM_ADMIN_ID:
+        return
+    try:
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        text = f"💡 Новая предложенная тема:\n\n«{name}»\nот {suggested_by}"
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{topic_id}"),
+                InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{topic_id}"),
+                InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{topic_id}"),
+            ]
+        ])
+        await _bot.send_message(
+            chat_id=TELEGRAM_ADMIN_ID,
+            text=text,
+            reply_markup=keyboard,
+        )
+    except Exception:
+        logger.exception("Failed to notify admin about suggestion")
+
+
+async def handle_suggestion_callback(update, context):
+    """Handle inline button presses for suggestion moderation."""
+    if not _is_admin(update):
+        return
+
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data  # e.g. "suggest_approve_5", "suggest_edit_5", "suggest_reject_5"
+    parts = data.split("_", 2)
+    if len(parts) != 3:
+        return
+
+    action = parts[1]  # approve / edit / reject
+    try:
+        topic_id = int(parts[2])
+    except ValueError:
+        return
+
+    if action == "approve":
+        await _do_approve(query, topic_id)
+    elif action == "reject":
+        await _do_reject(query, topic_id)
+    elif action == "edit":
+        await _do_edit_start(query, topic_id)
+
+
+async def _do_approve(query, topic_id: int):
+    try:
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models import SuggestedTopic
+
+        async with async_session() as db:
+            result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+            topic = result.scalar_one_or_none()
+            if not topic:
+                await query.edit_message_text("Тема не найдена")
+                return
+
+            topic.status = "approved"
+            name = topic.name
+            await db.commit()
+
+        await query.edit_message_text(f"✅ Одобрено: «{name}»\nТеперь доступно для голосования.")
+    except Exception:
+        await query.edit_message_text("Ошибка при одобрении")
+
+
+async def _do_reject(query, topic_id: int):
+    try:
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models import SuggestedTopic
+
+        async with async_session() as db:
+            result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+            topic = result.scalar_one_or_none()
+            if not topic:
+                await query.edit_message_text("Тема не найдена")
+                return
+
+            name = topic.name
+            topic.status = "rejected"
+            await db.commit()
+
+        await query.edit_message_text(f"❌ Отклонено: «{name}»")
+    except Exception:
+        await query.edit_message_text("Ошибка при отклонении")
+
+
+async def _do_edit_start(query, topic_id: int):
+    """Start edit flow — ask admin for new text."""
+    chat_id = query.message.chat_id
+
+    try:
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models import SuggestedTopic
+
+        async with async_session() as db:
+            result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+            topic = result.scalar_one_or_none()
+            if not topic:
+                await query.edit_message_text("Тема не найдена")
+                return
+            current_name = topic.name
+    except Exception:
+        await query.edit_message_text("Ошибка")
+        return
+
+    _pending_edits[chat_id] = {"topic_id": topic_id, "message_id": query.message.message_id}
+
+    await query.edit_message_text(
+        f"✏️ Текущая формулировка:\n«{current_name}»\n\n"
+        f"Отправьте новый текст темы (или /cancel для отмены):"
+    )
+
+
+async def handle_edit_text(update, context):
+    """Handle text messages — check if admin is in edit flow."""
+    chat_id = update.message.chat_id
+    if chat_id not in _pending_edits:
+        return
+
+    if not _is_admin(update):
+        return
+
+    text = update.message.text.strip()
+    if not text or len(text) > 120:
+        await update.message.reply_text("Текст должен быть от 1 до 120 символов. Попробуйте ещё раз:")
+        return
+
+    pending = _pending_edits.pop(chat_id)
+    topic_id = pending["topic_id"]
+
+    try:
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models import SuggestedTopic
+
+        async with async_session() as db:
+            result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+            topic = result.scalar_one_or_none()
+            if not topic:
+                await update.message.reply_text("Тема не найдена")
+                return
+
+            old_name = topic.name
+            topic.name = text
+            await db.commit()
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Одобрить", callback_data=f"suggest_approve_{topic_id}"),
+                InlineKeyboardButton("✏️ Править", callback_data=f"suggest_edit_{topic_id}"),
+                InlineKeyboardButton("❌ Отклонить", callback_data=f"suggest_reject_{topic_id}"),
+            ]
+        ])
+        await update.message.reply_text(
+            f"✏️ Формулировка обновлена:\n\n"
+            f"Было: «{old_name}»\n"
+            f"Стало: «{text}»\n\n"
+            f"Что сделать с темой?",
+            reply_markup=keyboard,
+        )
+    except Exception:
+        await update.message.reply_text("Ошибка при обновлении темы")
+
+
+# --- Notification functions ---
 
 async def notify_new_topic(topic_name: str):
     """Send notification when a new topic is created."""

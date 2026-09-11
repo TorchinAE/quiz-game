@@ -44,3 +44,9 @@ async def init_db():
         columns = [row[1] for row in result.fetchall()]
         if "is_private" not in columns:
             await conn.execute(text("ALTER TABLE rooms ADD COLUMN is_private BOOLEAN DEFAULT 0"))
+
+        # Migration: add 'status' column to suggested_topics if missing
+        result = await conn.execute(text("PRAGMA table_info(suggested_topics)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "status" not in columns:
+            await conn.execute(text("ALTER TABLE suggested_topics ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'approved'"))

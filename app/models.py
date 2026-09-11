@@ -151,6 +151,7 @@ class SuggestedTopic(Base):
     name = Column(String(120), nullable=False)
     suggested_by = Column(String(100), nullable=False)
     player_id = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending / approved / rejected
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     votes = relationship("TopicVote", back_populates="suggested_topic", cascade="all, delete-orphan")
