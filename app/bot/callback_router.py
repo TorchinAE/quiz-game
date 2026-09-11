@@ -63,3 +63,60 @@ async def handle_text_input(update, context):
     from .flows import dispatch_flow_step
 
     await dispatch_flow_step(update, context, flow)
+
+
+async def handle_photo_input(update, context):
+    """Handle photo messages for image upload flow."""
+    if not _is_admin(update):
+        return
+    flow = context.user_data.get("flow")
+    if not flow or flow.get("type") != "question_image_upload":
+        return
+
+    import os
+    import uuid
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from app.bot.questions import PICTURES_DIR
+    from app.bot.utils import home_keyboard
+
+    try:
+        # Get the largest photo
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+
+        os.makedirs(PICTURES_DIR, exist_ok=True)
+        filename = f"{uuid.uuid4().hex}.jpg"
+        filepath = os.path.join(PICTURES_DIR, filename)
+        await file.download_to_drive(filepath)
+
+        question_id = flow["data"]["question_id"]
+        url = f"/pictures/{filename}"
+
+        from sqlalchemy import select
+
+        from app.database import async_session
+        from app.models import Question
+
+        async with async_session() as db:
+            result = await db.execute(select(Question).where(Question.id == question_id))
+            q = result.scalar_one_or_none()
+            if q:
+                q.image_url = url
+                await db.commit()
+
+        del context.user_data["flow"]
+
+        kb = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("◀️ К вопросу", callback_data=f"q:vw:{question_id}"),
+                    InlineKeyboardButton("🏠 Меню", callback_data="mn"),
+                ]
+            ]
+        )
+        await update.message.reply_text(f"✅ Фото загружено и установлено:\n{url}", reply_markup=kb)
+    except Exception:
+        logger.exception("Photo upload failed")
+        await update.message.reply_text("❌ Ошибка загрузки фото", reply_markup=home_keyboard())

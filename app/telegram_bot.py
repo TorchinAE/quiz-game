@@ -24,7 +24,7 @@ async def start_bot():
         from telegram import Bot
         from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
-        from app.bot.callback_router import handle_callback, handle_text_input
+        from app.bot.callback_router import handle_callback, handle_photo_input, handle_text_input
         from app.bot.menus import cmd_start
 
         _bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -32,6 +32,7 @@ async def start_bot():
         _bot_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         _bot_app.add_handler(CommandHandler("start", cmd_start))
         _bot_app.add_handler(CallbackQueryHandler(handle_callback))
+        _bot_app.add_handler(MessageHandler(filters.PHOTO, handle_photo_input))
         _bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
 
         await _bot_app.initialize()

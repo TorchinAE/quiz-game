@@ -229,7 +229,7 @@ async def _commit_question_edit(update, context, flow, question_id, field, value
     from app.database import async_session
     from app.models import Question
 
-    col_map = {"t": "text", "o": "correct_option", "e": "explanation", "f": "difficulty"}
+    col_map = {"t": "text", "o": "correct_option", "e": "explanation", "f": "difficulty", "i": "image_url"}
     col = col_map.get(field)
     if not col:
         del context.user_data["flow"]
