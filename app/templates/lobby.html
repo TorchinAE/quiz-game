@@ -325,13 +325,22 @@ function goToPrivateRoom() {
 
 function copyInviteLink() {
     const url = document.getElementById('invite-link').value;
-    navigator.clipboard.writeText(url).then(() => {
-        showToast('Ссылка скопирована!', 'success');
-    }).catch(() => {
-        document.getElementById('invite-link').select();
+    copyToClipboard(url);
+}
+
+function copyToClipboard(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
         document.execCommand('copy');
         showToast('Ссылка скопирована!', 'success');
-    });
+    } catch(e) {
+        showToast('Не удалось скопировать', 'error');
+    }
+    document.body.removeChild(ta);
 }
 
 async function joinRoom(code, team, role) {
