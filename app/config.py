@@ -14,6 +14,8 @@ DATABASE_URL = os.getenv("QUIZ_DATABASE_URL", "sqlite+aiosqlite:///./data/quiz.d
 MAX_TEAMS = 2
 QUESTIONS_PER_GAME = 12
 ANSWER_TIME_SECONDS = 20
+ANSWER_GRACE_MULTIPLIER = 2  # grace timeout = ANSWER_TIME_SECONDS * this
+READING_TIME_SECONDS = 8  # time to read the answer result
 
 # Room system
 ROOM_INACTIVITY_TIMEOUT_SECONDS = 60

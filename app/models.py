@@ -108,6 +108,8 @@ class Room(Base):
     question_started_at = Column(DateTime, nullable=True)
     last_activity_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    round_phase = Column(String(20), nullable=True)  # None, "answering", "results", "reading"
+    round_started_at = Column(DateTime, nullable=True)  # when current round started
 
     topic = relationship("Topic")
 

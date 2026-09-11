@@ -42,11 +42,6 @@ class StartRequest(BaseModel):
     topic_id: int
 
 
-class AnswerRequest(BaseModel):
-    question_id: int
-    option: str
-
-
 class NicknameRequest(BaseModel):
     nickname: str
 
@@ -397,6 +392,7 @@ async def next_question(
     player: dict = Depends(get_current_player),
     db: AsyncSession = Depends(get_db),
 ):
+    """Start the first question. Only works when game is active and no question has been sent yet."""
     async with _next_question_lock:
         result = await db.execute(select(Room).where(Room.code == code.upper()))
         room = result.scalar_one_or_none()
@@ -405,20 +401,12 @@ async def next_question(
 
         question_ids = room.get_questions_order()
 
-        # Prevent advancing if current question time hasn't expired yet
-        if room.current_question_index >= 0 and room.question_started_at:
-            elapsed = (utcnow() - room.question_started_at).total_seconds()
-            if elapsed < ANSWER_TIME_SECONDS:
-                raise HTTPException(status_code=400, detail="Question time has not expired yet")
-
-        # Broadcast reveal for the current question before advancing
+        # Only allow for the first question (index == -1)
         if room.current_question_index >= 0:
-            from app.routers.ws import broadcast_reveal_to_room
+            # Already started — ignore (server manages transitions)
+            return {"status": "active", "already_started": True}
 
-            await broadcast_reveal_to_room(room.code)
-
-        next_idx = room.current_question_index + 1
-
+        next_idx = 0
         if next_idx >= len(question_ids):
             room.status = "finished"
             room.last_activity_at = utcnow()
@@ -437,106 +425,7 @@ async def next_question(
 
         await broadcast_question_to_room(room.code)
 
-        qid = question_ids[next_idx]
-        q_result = await db.execute(select(Question).where(Question.id == qid))
-        q = q_result.scalar_one_or_none()
-
-        return {
-            "status": "active",
-            "question": {
-                "id": q.id,
-                "text": q.text,
-                "image_url": q.image_url,
-                "option_a": q.option_a,
-                "option_b": q.option_b,
-                "option_c": q.option_c,
-                "option_d": q.option_d,
-                "difficulty": q.difficulty,
-                "index": next_idx + 1,
-                "total": QUESTIONS_PER_GAME,
-            }
-            if q
-            else None,
-        }
-
-
-@router.post("/{code}/answer")
-async def submit_answer(
-    code: str,
-    req: AnswerRequest,
-    player: dict = Depends(get_current_player),
-    db: AsyncSession = Depends(get_db),
-):
-    if req.option.upper() not in ("A", "B", "C", "D"):
-        raise HTTPException(status_code=400, detail="Option must be A, B, C, or D")
-
-    result = await db.execute(select(Room).where(Room.code == code.upper()))
-    room = result.scalar_one_or_none()
-    if not room or room.status != "active":
-        raise HTTPException(status_code=400, detail="No active game in this room")
-
-    if room.question_started_at:
-        elapsed = (utcnow() - room.question_started_at).total_seconds()
-        if elapsed >= ANSWER_TIME_SECONDS:
-            raise HTTPException(status_code=400, detail="Time is up")
-
-    question_ids = room.get_questions_order()
-    if room.current_question_index < 0 or room.current_question_index >= len(question_ids):
-        raise HTTPException(status_code=400, detail="No current question")
-
-    current_qid = question_ids[room.current_question_index]
-
-    # Validate that the submitted question_id matches the current question
-    if req.question_id != current_qid:
-        raise HTTPException(status_code=400, detail="This question is no longer active")
-
-    # Find the member
-    nickname = player.get("nickname", "Unknown")
-    member_result = await db.execute(
-        select(RoomMember).where(
-            RoomMember.room_id == room.id,
-            RoomMember.nickname == nickname,
-            RoomMember.role == "player",
-        )
-    )
-    member = member_result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(status_code=400, detail="You are not a player in this room")
-
-    # Check if anyone from this team already answered
-    team_answer = await db.execute(
-        select(RoomAnswer).where(
-            RoomAnswer.room_id == room.id,
-            RoomAnswer.team == member.team,
-            RoomAnswer.question_id == current_qid,
-        )
-    )
-    if team_answer.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Your team already answered this question")
-
-    q_result = await db.execute(select(Question).where(Question.id == current_qid))
-    question = q_result.scalar_one_or_none()
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-
-    is_correct = req.option.upper() == question.correct_option
-    answer = RoomAnswer(
-        room_id=room.id,
-        room_member_id=member.id,
-        team=member.team,
-        question_id=current_qid,
-        selected_option=req.option.upper(),
-        is_correct=is_correct,
-    )
-    db.add(answer)
-
-    # Scores are deferred — calculated on reveal, not on answer
-
-    room.last_activity_at = utcnow()
-    db.add(room)
-    await db.commit()
-
-    return {"is_correct": is_correct, "team": member.team}
+        return {"status": "active", "question_index": next_idx}
 
 
 @router.post("/{code}/reset")
@@ -577,10 +466,7 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
         q_result = await db.execute(select(Question).where(Question.id == qid))
         q = q_result.scalar_one_or_none()
         if q:
-            elapsed = 0.0
-            if room.question_started_at:
-                elapsed = (utcnow() - room.question_started_at).total_seconds()
-            time_left = max(0, ANSWER_TIME_SECONDS - elapsed)
+            time_total = ANSWER_TIME_SECONDS
             current_q = {
                 "id": q.id,
                 "text": q.text,
@@ -589,19 +475,18 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
                 "option_b": q.option_b,
                 "option_c": q.option_c,
                 "option_d": q.option_d,
+                "correct_option": q.correct_option,
+                "explanation": q.explanation,
                 "difficulty": q.difficulty,
-                "time_left": round(time_left, 1),
+                "time": time_total,
                 "index": room.current_question_index + 1,
                 "total": len(question_ids),
             }
 
-    # Check for reveal
-    correct_reveal = None
-    if room.status == "active" and room.current_question_index >= 0:
-        elapsed = 0.0
-        if room.question_started_at:
-            elapsed = (utcnow() - room.question_started_at).total_seconds()
-        if elapsed >= ANSWER_TIME_SECONDS:
+    # Check for answer_result (round_phase == "results" or "reading")
+    answer_result = None
+    if room.status == "active" and room.round_phase in ("results", "reading") and room.current_question_index >= 0:
+        if room.current_question_index < len(question_ids):
             qid = question_ids[room.current_question_index]
             q_result = await db.execute(select(Question).where(Question.id == qid))
             q = q_result.scalar_one_or_none()
@@ -625,7 +510,7 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
                             "is_correct": a.is_correct,
                         }
                     )
-                correct_reveal = {
+                answer_result = {
                     "correct_option": q.correct_option,
                     "explanation": q.explanation,
                     "answers": answer_details,
@@ -649,6 +534,7 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
         "topic": topic_name,
         "topic_id": room.topic_id,
         "current_question": current_q,
+        "round_phase": room.round_phase,
         "team_a": {
             "score": team_a_score,
             "members": [{"id": m.id, "nickname": m.nickname} for m in members if m.team == "A" and m.role == "player"],
@@ -658,5 +544,5 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
             "members": [{"id": m.id, "nickname": m.nickname} for m in members if m.team == "B" and m.role == "player"],
         },
         "observers": [{"id": m.id, "nickname": m.nickname} for m in members if m.role == "observer"],
-        "correct_reveal": correct_reveal,
+        "answer_result": answer_result,
     }

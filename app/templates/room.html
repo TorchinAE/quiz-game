@@ -32,12 +32,12 @@
             <select id="topic-select" style="width:100%;margin-top:5px"></select>
         </div>
         <div id="private-invite" style="display:none;margin-top:20px;text-align:center;padding:20px;background:rgba(233,69,96,0.05);border-radius:12px;border:1px solid rgba(233,69,96,0.15)">
-            <h3 style="color:var(--color-primary);margin-bottom:10px">🔗 Пригласить игроков</h3>
+            <h3 style="color:var(--color-primary);margin-bottom:10px">Пригласить игроков</h3>
             <p style="color:var(--text-secondary);margin-bottom:12px;font-size:0.9em">Поделитесь ссылкой или QR-кодом</p>
             <img id="room-qr" src="" alt="QR" style="width:160px;height:160px;margin:0 auto 12px;display:block;border-radius:10px;background:#fff;padding:6px">
             <div style="display:flex;gap:8px;max-width:500px;margin:0 auto">
                 <input type="text" id="room-invite-link" readonly style="flex:1;margin-bottom:0;font-size:0.85em">
-                <button class="btn btn-primary btn-sm" onclick="copyRoomLink()">📋 Копировать</button>
+                <button class="btn btn-primary btn-sm" onclick="copyRoomLink()">Копировать</button>
             </div>
         </div>
         <div style="text-align:center;margin-top:20px">
@@ -62,15 +62,24 @@
         <img class="question-image" id="q-image" referrerpolicy="no-referrer" crossorigin="anonymous">
         <div class="question-text" id="q-text"></div>
         <div class="options-grid" id="options"></div>
+        <div id="waiting-players" style="display:none;text-align:center;padding:20px">
+            <div class="waiting-spinner"></div>
+            <p style="color:var(--text-secondary);margin-top:10px" id="waiting-text">Ожидание других игроков...</p>
+        </div>
     </div>
 
-    <!-- Reveal card -->
-    <div class="card" id="reveal-card" style="display:none">
+    <!-- Answer result card -->
+    <div class="card" id="result-card" style="display:none">
         <div class="reveal-box">
-            <div class="reveal-correct" id="reveal-correct"></div>
-            <div class="reveal-explanation" id="reveal-explanation"></div>
-            <div class="reveal-answers" id="reveal-answers"></div>
+            <div class="reveal-correct" id="result-correct"></div>
+            <div class="reveal-explanation" id="result-explanation"></div>
+            <div class="reveal-answers" id="result-answers"></div>
+            <div id="dropped-players" style="display:none;margin-top:10px"></div>
         </div>
+        <div class="reading-progress-wrap" id="reading-progress-wrap" style="display:none">
+            <div class="reading-progress-bar" id="reading-progress-bar"></div>
+        </div>
+        <div class="reading-label" id="reading-label" style="display:none">Чтение результата...</div>
     </div>
 
     <!-- Finished card -->
@@ -118,17 +127,14 @@ function showToast(msg, type) {
     document.body.appendChild(toast);
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
 }
+
 let ws = null;
 let timerInterval = null;
 let currentQuestion = null;
-let answered = false;
 let selectedOption = null;
-let revealTimeout = null;
 let isObserver = false;
-let nextQuestionInFlight = false;
-let nextRetryCount = 0;
-let showingReveal = false;
-let pendingNextQuestion = null;
+let showingResult = false;
+let readingTimerInterval = null;
 
 document.getElementById('room-code').textContent = ROOM_CODE;
 
@@ -144,7 +150,6 @@ function connectWS() {
     ws = new WebSocket(`${protocol}//${location.host}${BASE}/ws/room/${ROOM_CODE}`);
 
     ws.onopen = () => {
-        // Send auth
         ws.send(JSON.stringify({type: 'auth', token: token || ''}));
         loadState();
     };
@@ -152,7 +157,9 @@ function connectWS() {
     ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         if (msg.type === 'question') onWSQuestion(msg.data);
-        if (msg.type === 'reveal') onWSReveal(msg.data);
+        if (msg.type === 'answer_result') onWSAnswerResult(msg.data);
+        if (msg.type === 'player_ready') onWSPlayerReady(msg.data);
+        if (msg.type === 'player_dropped') onWSDropped(msg.data);
         if (msg.type === 'scores') onWSScores(msg.data);
         if (msg.type === 'game_over') onWSGameOver(msg.data);
         if (msg.type === 'room_update') onWSRoomUpdate(msg.data);
@@ -164,30 +171,23 @@ function connectWS() {
 loadState();
 connectWS();
 
+// --- WS Handlers ---
 function onWSQuestion(q) {
-    if (showingReveal) {
-        // Buffer the question — show it after reveal timeout
-        pendingNextQuestion = q;
-        return;
-    }
-    clearTimeout(revealTimeout);
+    showingResult = false;
     showQuestion(q);
 }
 
-function onWSReveal(data) {
-    showingReveal = true;
-    showReveal(data);
-    clearTimeout(revealTimeout);
-    revealTimeout = setTimeout(() => {
-        showingReveal = false;
-        if (pendingNextQuestion) {
-            const q = pendingNextQuestion;
-            pendingNextQuestion = null;
-            showQuestion(q);
-        } else {
-            nextQuestion();
-        }
-    }, 6000);
+function onWSAnswerResult(data) {
+    showAnswerResult(data);
+}
+
+function onWSPlayerReady(data) {
+    const el = document.getElementById('waiting-text');
+    if (el) el.textContent = `Ожидание других игроков... (${data.total_ready}/${data.total_players})`;
+}
+
+function onWSDropped(data) {
+    showToast(`${data.nickname} выбыл из раунда`, 'error');
 }
 
 function onWSScores(data) {
@@ -200,7 +200,6 @@ function onWSGameOver(data) {
 }
 
 function onWSRoomUpdate(data) {
-    // Refresh room state
     loadState();
 }
 
@@ -215,29 +214,21 @@ async function loadState() {
         if (!res.ok) { window.location.href = BASE + '/'; return; }
         const state = await res.json();
 
-        // Determine if current user is observer
         if (playerData) {
             const allPlayers = [...(state.team_a?.members || []), ...(state.team_b?.members || [])];
-            const isPlayer = allPlayers.some(m => m.nickname === playerData.nickname);
-            isObserver = !isPlayer;
+            isObserver = !allPlayers.some(m => m.nickname === playerData.nickname);
         } else {
             isObserver = true;
         }
 
         const roleBadge = document.getElementById('role-badge');
-        if (isObserver) {
-            roleBadge.textContent = '👁 Наблюдатель';
-            roleBadge.className = 'role-badge role-observer';
-        } else {
-            roleBadge.textContent = '🎮 Игрок';
-            roleBadge.className = 'role-badge role-player';
-        }
+        roleBadge.textContent = isObserver ? '👁 Наблюдатель' : '🎮 Игрок';
+        roleBadge.className = 'role-badge ' + (isObserver ? 'role-observer' : 'role-player');
 
         document.getElementById('scores-bar').style.display = 'flex';
         document.getElementById('score-a').textContent = state.team_a?.score || 0;
         document.getElementById('score-b').textContent = state.team_b?.score || 0;
 
-        // Show room name
         const roomName = state.name || ROOM_CODE;
         document.getElementById('lobby-title').textContent = roomName;
         document.title = `${roomName} — Квиз-Тендер`;
@@ -246,24 +237,14 @@ async function loadState() {
             showSection('waiting-section');
             renderWaitingRoom(state);
         } else if (state.status === 'active') {
-            if (state.current_question) {
+            if (state.round_phase === 'results' || state.round_phase === 'reading') {
+                if (state.answer_result) {
+                    showAnswerResult(state.answer_result);
+                } else if (state.current_question) {
+                    showQuestion(state.current_question);
+                }
+            } else if (state.current_question) {
                 showQuestion(state.current_question);
-            }
-            if (state.correct_reveal) {
-                showReveal(state.correct_reveal);
-                showingReveal = true;
-                // Ensure auto-advance timer is set (loadState may have cleared it)
-                clearTimeout(revealTimeout);
-                revealTimeout = setTimeout(() => {
-                    showingReveal = false;
-                    if (pendingNextQuestion) {
-                        const q = pendingNextQuestion;
-                        pendingNextQuestion = null;
-                        showQuestion(q);
-                    } else {
-                        nextQuestion();
-                    }
-                }, 6000);
             }
         } else if (state.status === 'finished') {
             showSection('finished-card');
@@ -296,7 +277,6 @@ function renderWaitingRoom(state) {
         </div>
     `;
 
-    // Show start button if enough players
     if (teamAMembers.length >= 1 && teamBMembers.length >= 1 && !isObserver) {
         document.getElementById('start-btn').style.display = 'inline-block';
         document.getElementById('waiting-msg').style.display = 'none';
@@ -314,7 +294,6 @@ function renderWaitingRoom(state) {
         document.getElementById('topic-select-wrap').style.display = 'none';
     }
 
-    // Show invite section for all rooms
     const url = location.origin + BASE + '/room/' + ROOM_CODE;
     document.getElementById('room-invite-link').value = url;
     document.getElementById('room-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(url);
@@ -339,24 +318,23 @@ async function startGame() {
         });
         const data = await res.json();
         if (!res.ok) return showToast(data.detail, 'error');
-        await nextQuestion();
+        await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/next`, {
+            method: 'POST',
+            headers: {'Authorization': 'Bearer ' + token}
+        });
     } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 
 // --- Question ---
 function showQuestion(q) {
     currentQuestion = q;
-    answered = false;
     selectedOption = null;
-    nextQuestionInFlight = false;
-    nextRetryCount = 0;
-    showingReveal = false;
-    pendingNextQuestion = null;
-    clearTimeout(revealTimeout);
+    showingResult = false;
+    clearInterval(readingTimerInterval);
 
     showSection('question-card');
     document.getElementById('scores-bar').style.display = 'flex';
-    document.getElementById('submit-answer-wrap').style.display = 'none';
+    document.getElementById('waiting-players').style.display = 'none';
 
     document.getElementById('q-counter').textContent = `Вопрос ${q.index} из ${q.total}`;
     const diffEl = document.getElementById('q-difficulty');
@@ -378,25 +356,20 @@ function showQuestion(q) {
     ];
 
     if (isObserver) {
-        // Observers see read-only options
         document.getElementById('options').innerHTML = options.map(o => `
-            <div class="option-btn option-readonly">
-                <strong>${o.key}.</strong> ${o.text}
-            </div>
+            <div class="option-btn option-readonly"><strong>${o.key}.</strong> ${o.text}</div>
         `).join('');
     } else {
         document.getElementById('options').innerHTML = options.map(o => `
-            <button class="option-btn" onclick="selectOption('${o.key}')" id="opt-${o.key}">
-                <strong>${o.key}.</strong> ${o.text}
-            </button>
+            <button class="option-btn" onclick="selectOption('${o.key}')" id="opt-${o.key}"><strong>${o.key}.</strong> ${o.text}</button>
         `).join('');
     }
 
-    startTimer(q.time_left || 20);
+    startTimer(q.time || 20);
 }
 
 // --- Timer (SVG circle) ---
-const CIRCUMFERENCE = 2 * Math.PI * 42; // r=42
+const CIRCUMFERENCE = 2 * Math.PI * 42;
 
 function startTimer(seconds) {
     let timeLeft = seconds;
@@ -435,39 +408,25 @@ function disableOptions() {
     });
 }
 
-async function onTimerExpired() {
-    // Submit the selected answer when time expires
-    await submitAnswer();
+function onTimerExpired() {
     disableOptions();
-    try {
-        const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/state`);
-        const state = await res.json();
-        if (state.correct_reveal) {
-            showReveal(state.correct_reveal);
-            showingReveal = true;
-            clearTimeout(revealTimeout);
-            revealTimeout = setTimeout(() => {
-                showingReveal = false;
-                if (pendingNextQuestion) {
-                    const q = pendingNextQuestion;
-                    pendingNextQuestion = null;
-                    showQuestion(q);
-                } else {
-                    nextQuestion();
-                }
-            }, 6000);
-        } else if (state.current_question && state.current_question.id !== currentQuestion?.id) {
-            // Another client already advanced — show the new question
-            showQuestion(state.current_question);
-        }
-    } catch(e) {}
+    if (ws && ws.readyState === WebSocket.OPEN && currentQuestion) {
+        ws.send(JSON.stringify({
+            type: 'timer_exp',
+            data: { question_id: currentQuestion.id, option: selectedOption }
+        }));
+    }
+    showWaitingForPlayers();
 }
 
-// --- Answer ---
-function selectOption(key) {
-    if (answered || isObserver) return;
+function showWaitingForPlayers() {
+    document.getElementById('waiting-players').style.display = 'block';
+    document.getElementById('waiting-text').textContent = 'Ожидание других игроков...';
+}
 
-    // Deselect previous, select new
+// --- Answer Selection ---
+function selectOption(key) {
+    if (isObserver) return;
     document.querySelectorAll('.option-btn').forEach(b => {
         if (b.tagName === 'BUTTON') b.classList.remove('selected');
     });
@@ -475,43 +434,13 @@ function selectOption(key) {
     selectedOption = key;
 }
 
-async function submitAnswer() {
-    if (!selectedOption || !currentQuestion || answered) return;
-    answered = true;
-    disableOptions();
-
-    try {
-        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/answer`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token,
-            },
-            body: JSON.stringify({question_id: currentQuestion.id, option: selectedOption})
-        });
-        if (res.ok) {
-            const data = await res.json();
-            if (data.is_correct) {
-                showToast('Правильно!', 'success');
-            } else {
-                showToast('Неправильно', 'error');
-            }
-        } else {
-            const data = await res.json().catch(() => ({}));
-            answered = false;
-            showToast(data.detail || 'Ошибка отправки ответа', 'error');
-        }
-    } catch(e) {
-        answered = false;
-        showToast('Ошибка сети', 'error');
-    }
-}
-
-// --- Reveal ---
-function showReveal(data) {
+// --- Answer Result ---
+function showAnswerResult(data) {
+    showingResult = true;
     clearInterval(timerInterval);
-    clearTimeout(revealTimeout);
+    clearInterval(readingTimerInterval);
     disableOptions();
+    document.getElementById('waiting-players').style.display = 'none';
 
     document.querySelectorAll('.option-btn').forEach(b => {
         const key = b.id?.replace('opt-', '') || '';
@@ -519,61 +448,65 @@ function showReveal(data) {
         else if (b.classList.contains('selected')) b.classList.add('wrong');
     });
 
-    document.getElementById('reveal-card').style.display = 'block';
-    document.getElementById('reveal-correct').textContent = `Правильный ответ: ${data.correct_option}`;
-    document.getElementById('reveal-explanation').textContent = data.explanation || '';
+    showSection('result-card');
+    document.getElementById('result-correct').textContent = `Правильный ответ: ${data.correct_option}`;
+    document.getElementById('result-explanation').textContent = data.explanation || '';
 
     if (data.answers && data.answers.length > 0) {
-        document.getElementById('reveal-answers').innerHTML = data.answers.map(a => `
+        document.getElementById('result-answers').innerHTML = data.answers.map(a => `
             <div class="reveal-answer">
                 <span class="dot ${a.is_correct ? 'dot-correct' : 'dot-wrong'}"></span>
                 <span>Команда ${a.team} (${a.member_nickname}): ${a.selected_option} ${a.is_correct ? '✓' : '✗'}</span>
             </div>
         `).join('');
     } else {
-        document.getElementById('reveal-answers').innerHTML = '<div class="reveal-answer">Никто не ответил</div>';
+        document.getElementById('result-answers').innerHTML = '<div class="reveal-answer">Никто не ответил</div>';
     }
 
-    // Update scores
+    const droppedEl = document.getElementById('dropped-players');
+    if (data.dropped && data.dropped.length > 0) {
+        droppedEl.style.display = 'block';
+        droppedEl.innerHTML = data.dropped.map(n =>
+            `<div style="color:#e94560;font-size:0.9em">⚠ ${n} выбыл из раунда</div>`
+        ).join('');
+    } else {
+        droppedEl.style.display = 'none';
+    }
+
     if (data.team_a_score !== undefined) document.getElementById('score-a').textContent = data.team_a_score;
     if (data.team_b_score !== undefined) document.getElementById('score-b').textContent = data.team_b_score;
+
+    startReadingTimer(8);
 }
 
-// --- Next Question ---
-const MAX_NEXT_RETRIES = 3;
-async function nextQuestion() {
-    if (nextQuestionInFlight) return;
-    if (nextRetryCount >= MAX_NEXT_RETRIES) return;
-    nextQuestionInFlight = true;
-    clearTimeout(revealTimeout);
-    try {
-        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/next`, {
-            method: 'POST',
-            headers: {'Authorization': 'Bearer ' + token}
-        });
-        const data = await res.json();
-        if (res.ok) {
-            nextRetryCount = 0;
-            if (data.status === 'finished') {
-                showGameOver(null);
-            }
-        } else {
-            // Rejected (race condition with another client) — reset and retry
-            nextQuestionInFlight = false;
-            nextRetryCount++;
-            setTimeout(() => { nextQuestion(); }, 3000);
+// --- Reading Progress Bar ---
+function startReadingTimer(seconds) {
+    const wrap = document.getElementById('reading-progress-wrap');
+    const bar = document.getElementById('reading-progress-bar');
+    const label = document.getElementById('reading-label');
+    wrap.style.display = 'block';
+    label.style.display = 'block';
+    label.textContent = 'Чтение результата...';
+    bar.style.width = '100%';
+
+    let timeLeft = seconds;
+    clearInterval(readingTimerInterval);
+    readingTimerInterval = setInterval(() => {
+        timeLeft -= 0.1;
+        if (timeLeft <= 0) {
+            clearInterval(readingTimerInterval);
+            timeLeft = 0;
+            bar.style.width = '0%';
+            label.textContent = 'Переход к следующему вопросу...';
         }
-    } catch(e) {
-        nextQuestionInFlight = false;
-        nextRetryCount++;
-        setTimeout(() => { nextQuestion(); }, 3000);
-    }
+        bar.style.width = ((timeLeft / seconds) * 100) + '%';
+    }, 100);
 }
 
 // --- Game Over ---
 function showGameOver(data) {
     clearInterval(timerInterval);
-    clearTimeout(revealTimeout);
+    clearInterval(readingTimerInterval);
     showSection('finished-card');
 
     if (data && data.data) data = data.data;
@@ -582,7 +515,6 @@ function showGameOver(data) {
     const scoreB = data?.team_b_score ?? document.getElementById('score-b').textContent;
     const membersA = data?.team_a_members || [];
     const membersB = data?.team_b_members || [];
-
     const winner = parseInt(scoreA) > parseInt(scoreB) ? 'A' : parseInt(scoreB) > parseInt(scoreA) ? 'B' : null;
 
     document.getElementById('final-results').innerHTML = `
@@ -609,10 +541,7 @@ async function editNickname() {
     try {
         const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/nickname`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token,
-            },
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
             body: JSON.stringify({nickname: newNick.trim()})
         });
         const data = await res.json();
@@ -637,13 +566,7 @@ async function leaveRoom() {
 }
 
 function copyRoomLink() {
-    const url = document.getElementById('room-invite-link').value;
-    copyToClipboard(url);
-}
-
-function copyInviteLink() {
-    const url = document.getElementById('invite-link').value;
-    copyToClipboard(url);
+    copyToClipboard(document.getElementById('room-invite-link').value);
 }
 
 function copyToClipboard(text) {
@@ -663,10 +586,16 @@ function copyToClipboard(text) {
 
 // --- Section helper ---
 function showSection(id) {
-    ['waiting-section', 'question-card', 'reveal-card', 'finished-card', 'closed-card'].forEach(s => {
+    ['waiting-section', 'question-card', 'result-card', 'finished-card', 'closed-card'].forEach(s => {
         const el = document.getElementById(s);
         if (el) el.style.display = s === id ? 'block' : 'none';
     });
+    if (id !== 'question-card') clearInterval(timerInterval);
+    if (id !== 'result-card') {
+        document.getElementById('reading-progress-wrap').style.display = 'none';
+        document.getElementById('reading-label').style.display = 'none';
+        clearInterval(readingTimerInterval);
+    }
 }
 </script>
 {% endblock %}

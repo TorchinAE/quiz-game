@@ -52,3 +52,11 @@ async def init_db():
             await conn.execute(
                 text("ALTER TABLE suggested_topics ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'approved'")
             )
+
+        # Migration: add round_phase and round_started_at to rooms
+        result = await conn.execute(text("PRAGMA table_info(rooms)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "round_phase" not in columns:
+            await conn.execute(text("ALTER TABLE rooms ADD COLUMN round_phase VARCHAR(20) DEFAULT NULL"))
+        if "round_started_at" not in columns:
+            await conn.execute(text("ALTER TABLE rooms ADD COLUMN round_started_at DATETIME DEFAULT NULL"))
