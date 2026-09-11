@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 import pytest
 from sqlalchemy import select
 
@@ -215,9 +213,10 @@ async def test_join_finished_room(client):
     code = await create_and_join_room(client, topic_id, reg_a["token"], reg_b["token"])
 
     # Mark room as finished directly in DB
+    from sqlalchemy import select
+
     from app.database import async_session
     from app.models import Room
-    from sqlalchemy import select
 
     async with async_session() as db:
         result = await db.execute(select(Room).where(Room.code == code))
@@ -377,9 +376,6 @@ async def test_room_next_question(client):
     assert res.json()["question_index"] == 0
 
 
-import pytest
-
-
 @pytest.mark.skip(reason="POST /answer removed — answers now via WebSocket timer_exp")
 async def test_room_submit_answer(client):
     pass
@@ -485,9 +481,10 @@ async def test_room_finish_game(client):
     code = await create_and_join_room(client, topic_id, reg_a["token"], reg_b["token"])
 
     # Mark room as finished directly in DB (game flow is now server-managed via WS)
+    from sqlalchemy import select
+
     from app.database import async_session
     from app.models import Room
-    from sqlalchemy import select
 
     async with async_session() as db:
         result = await db.execute(select(Room).where(Room.code == code))
