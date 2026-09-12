@@ -84,7 +84,10 @@
 
     <!-- Finished card -->
     <div class="card" id="finished-card" style="display:none">
-        <h2>Тендер окончен!</h2>
+        <h2>Игра закончена!</h2>
+        <div id="winner-image" style="display:none;text-align:center;margin-bottom:15px">
+            <img src="/quiz/pictures/winner.jpg" alt="Победа!" style="max-width:320px;width:100%;border-radius:12px">
+        </div>
         <div id="final-results"></div>
         <div style="text-align:center;margin-top:20px">
             <a href="/quiz/" class="btn btn-secondary">Выйти в лобби</a>
@@ -107,6 +110,11 @@
 const token = localStorage.getItem('quiz_token');
 const playerData = JSON.parse(localStorage.getItem('quiz_player') || 'null');
 const ROOM_CODE = '{{ room_code }}';
+
+// Redirect unauthenticated users to lobby with join param
+if (!token) {
+    window.location.href = BASE + '/?join=' + ROOM_CODE;
+}
 
 async function fetchAuth(url, options) {
     const res = await fetch(url, options);
@@ -294,9 +302,10 @@ function renderWaitingRoom(state) {
         document.getElementById('topic-select-wrap').style.display = 'none';
     }
 
-    const url = location.origin + BASE + '/room/' + ROOM_CODE;
-    document.getElementById('room-invite-link').value = url;
-    document.getElementById('room-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(url);
+    const inviteUrl = location.origin + BASE + '/?join=' + ROOM_CODE;
+    const roomUrl = location.origin + BASE + '/room/' + ROOM_CODE;
+    document.getElementById('room-invite-link').value = inviteUrl;
+    document.getElementById('room-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(inviteUrl);
     document.getElementById('private-invite').style.display = 'block';
 }
 
@@ -516,6 +525,8 @@ function showGameOver(data) {
     const membersA = data?.team_a_members || [];
     const membersB = data?.team_b_members || [];
     const winner = parseInt(scoreA) > parseInt(scoreB) ? 'A' : parseInt(scoreB) > parseInt(scoreA) ? 'B' : null;
+
+    document.getElementById('winner-image').style.display = winner ? 'block' : 'none';
 
     document.getElementById('final-results').innerHTML = `
         <table class="results-table">

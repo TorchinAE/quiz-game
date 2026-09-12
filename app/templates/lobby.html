@@ -127,6 +127,7 @@ async function fetchAuth(url, options) {
 }
 
 // --- Init ---
+const joinCode = new URLSearchParams(window.location.search).get('join');
 updateAuthBar();
 document.getElementById('create-room-section').style.display = 'block';
 loadTopicCards();
@@ -136,6 +137,31 @@ loadLeaderboard();
 loadSuggestions();
 setInterval(loadRooms, 3000);
 setInterval(loadLeaderboard, 10000);
+
+// --- Auto-join from QR link ---
+if (joinCode && token) {
+    // Clean URL
+    history.replaceState(null, '', BASE + '/');
+    // Auto-join and redirect
+    (async () => {
+        try {
+            const res = await fetch(`${BASE}/api/rooms/${joinCode}/join`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                body: JSON.stringify({team: 'A', role: 'player'})
+            });
+            if (res.ok) {
+                window.location.href = BASE + '/room/' + joinCode;
+            } else {
+                // Already in room or room full — just go to room page
+                window.location.href = BASE + '/room/' + joinCode;
+            }
+        } catch(e) { showToast('Ошибка подключения к комнате', 'error'); }
+    })();
+} else if (joinCode && !token) {
+    // Not authenticated — scroll to auth and highlight
+    showAuth();
+}
 
 // --- Auth bar ---
 function updateAuthBar() {
@@ -180,7 +206,8 @@ async function guestLogin() {
         if (!res.ok) return showError(data.detail);
         localStorage.setItem('quiz_token', data.token);
         localStorage.setItem('quiz_player', JSON.stringify(data.player));
-        location.reload();
+        if (joinCode) { window.location.href = BASE + '/?join=' + joinCode; }
+        else { location.reload(); }
     } catch(e) { showError('Ошибка сети'); }
 }
 
@@ -197,7 +224,8 @@ async function playerLogin() {
         if (!res.ok) return showError(data.detail);
         localStorage.setItem('quiz_token', data.token);
         localStorage.setItem('quiz_player', JSON.stringify({...data.player, is_registered: true}));
-        location.reload();
+        if (joinCode) { window.location.href = BASE + '/?join=' + joinCode; }
+        else { location.reload(); }
     } catch(e) { showError('Ошибка сети'); }
 }
 
@@ -215,7 +243,8 @@ async function playerRegister() {
         if (!res.ok) return showError(data.detail);
         localStorage.setItem('quiz_token', data.token);
         localStorage.setItem('quiz_player', JSON.stringify({...data.player, is_registered: true}));
-        location.reload();
+        if (joinCode) { window.location.href = BASE + '/?join=' + joinCode; }
+        else { location.reload(); }
     } catch(e) { showError('Ошибка сети'); }
 }
 
@@ -305,10 +334,11 @@ async function createRoom() {
 }
 
 function showPrivateInviteModal(code) {
-    const url = location.origin + BASE + '/room/' + code;
+    const url = location.origin + BASE + '/?join=' + code;
     document.getElementById('invite-link').value = url;
     document.getElementById('invite-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
     document.getElementById('private-invite-modal').style.display = 'flex';
+    pendingPrivateCode = code;
 }
 
 function closePrivateModal() {
@@ -317,8 +347,7 @@ function closePrivateModal() {
 
 let pendingPrivateCode = null;
 function goToPrivateRoom() {
-    const link = document.getElementById('invite-link').value;
-    const code = link.split('/room/')[1];
+    const code = pendingPrivateCode;
     closePrivateModal();
     window.location.href = BASE + '/room/' + code;
 }

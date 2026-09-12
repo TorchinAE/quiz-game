@@ -160,18 +160,25 @@ async def show_question_view(update, context, question_id):
     query = update.callback_query
     if q.image_url:
         try:
-            from app.config import BASE_URL
+            photo = None
+            if q.image_url.startswith("http"):
+                photo = q.image_url
+            else:
+                # Local file — read from disk
+                rel = q.image_url.lstrip("/")
+                if rel.startswith("pictures/"):
+                    rel = rel[len("pictures/"):]
+                local_path = os.path.join(PICTURES_DIR, rel)
+                if os.path.isfile(local_path):
+                    photo = open(local_path, "rb")
 
-            image_url = q.image_url
-            if not image_url.startswith("http"):
-                base = BASE_URL.rstrip("/") if BASE_URL else ""
-                image_url = f"{base}{image_url}"
-
-            # Send photo as a separate message (not inline) so the text+buttons stay editable
-            await context.bot.send_photo(
-                chat_id=query.message.chat_id,
-                photo=image_url,
-            )
+            if photo:
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=photo,
+                )
+                if hasattr(photo, "close"):
+                    photo.close()
         except Exception as e:
             logger.warning(f"Failed to send photo: {e}")
     await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(rows))
