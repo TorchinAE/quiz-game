@@ -167,7 +167,7 @@ async def show_question_view(update, context, question_id):
                 # Local file — read from disk
                 rel = q.image_url.lstrip("/")
                 if rel.startswith("pictures/"):
-                    rel = rel[len("pictures/"):]
+                    rel = rel[len("pictures/") :]
                 local_path = os.path.join(PICTURES_DIR, rel)
                 if os.path.isfile(local_path):
                     photo = open(local_path, "rb")
