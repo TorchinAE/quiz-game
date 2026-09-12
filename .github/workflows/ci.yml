@@ -190,6 +190,7 @@ jobs:
               echo "QUIZ_BACKUP_USER=${{ secrets.QUIZ_BACKUP_USER }}"
               echo "QUIZ_BACKUP_KEY=${{ secrets.QUIZ_BACKUP_KEY }}"
               echo "QUIZ_BACKUP_PATH=${{ secrets.QUIZ_BACKUP_PATH }}"
+              echo "QUIZ_BASE_URL=${{ secrets.QUIZ_BASE_URL }}"
             } > /home/mi/quiz-game/.env
 
             chmod 600 /home/mi/quiz-game/.env

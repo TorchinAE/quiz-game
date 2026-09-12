@@ -160,11 +160,21 @@ async def show_question_view(update, context, question_id):
     query = update.callback_query
     if q.image_url:
         try:
-            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(rows))
-        except Exception:
-            await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(rows))
-    else:
-        await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(rows))
+            from app.config import BASE_URL
+
+            image_url = q.image_url
+            if not image_url.startswith("http"):
+                base = BASE_URL.rstrip("/") if BASE_URL else ""
+                image_url = f"{base}{image_url}"
+
+            # Send photo as a separate message (not inline) so the text+buttons stay editable
+            await context.bot.send_photo(
+                chat_id=query.message.chat_id,
+                photo=image_url,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send photo: {e}")
+    await safe_edit_message(query, text, reply_markup=InlineKeyboardMarkup(rows))
 
 
 # --- Image management ---

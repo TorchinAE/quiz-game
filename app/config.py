@@ -25,6 +25,7 @@ ROOM_CODE_LENGTH = 6
 # Telegram bot
 TELEGRAM_BOT_TOKEN = os.getenv("QUIZ_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_ADMIN_ID = os.getenv("QUIZ_TELEGRAM_ADMIN_ID", "")
+BASE_URL = os.getenv("QUIZ_BASE_URL", "")  # e.g. https://example.com/quiz
 
 # Backup
 BACKUP_SERVER_HOST = os.getenv("QUIZ_BACKUP_HOST", "")
