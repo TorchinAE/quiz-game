@@ -107,7 +107,7 @@ class VisitTrackingMiddleware(BaseHTTPMiddleware):
                 page = "lobby"
             elif path.startswith("/room/"):
                 page = "room"
-            elif path == "/к2к1":
+            elif path in ("/к2к1", "/k2k1"):
                 page = "admin"
             else:
                 page = path
@@ -209,6 +209,7 @@ async def page_game(request: Request):
 
 
 @app.get("/к2к1", response_class=HTMLResponse)
+@app.get("/k2k1", response_class=HTMLResponse)
 async def page_admin(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
 
@@ -217,7 +218,7 @@ async def page_admin(request: Request):
 async def redirect_admin():
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse(url="/к2к1")
+    return RedirectResponse(url="/k2k1")
 
 
 @app.get("/results", response_class=HTMLResponse)

@@ -225,8 +225,9 @@ function onWSRoomClosed(data) {
 async function loadState() {
     try {
         const res = await fetch(`${BASE}/api/rooms/${ROOM_CODE}/state`);
-        if (!res.ok) { window.location.href = BASE + '/'; return; }
+        if (!res.ok) { console.error('loadState failed:', res.status); window.location.href = BASE + '/'; return; }
         const state = await res.json();
+        console.log('loadState:', state);
 
         if (playerData) {
             const allPlayers = [...(state.team_a?.members || []), ...(state.team_b?.members || [])];
@@ -263,7 +264,7 @@ async function loadState() {
         } else if (state.status === 'finished') {
             showSection('finished-card');
         }
-    } catch(e) {}
+    } catch(e) { console.error('loadState error:', e); }
 }
 
 // --- Waiting room ---
