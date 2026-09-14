@@ -27,6 +27,13 @@ TELEGRAM_BOT_TOKEN = os.getenv("QUIZ_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_ADMIN_ID = os.getenv("QUIZ_TELEGRAM_ADMIN_ID", "")
 BASE_URL = os.getenv("QUIZ_BASE_URL", "")  # e.g. https://example.com/quiz
 
+# Email notifications
+ADMIN_MAIL = os.getenv("QUIZ_ADMIN_MAIL", "")
+SMTP_HOST = os.getenv("QUIZ_SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("QUIZ_SMTP_PORT", "587"))
+SMTP_USER = os.getenv("QUIZ_SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("QUIZ_SMTP_PASSWORD", "")
+
 # Backup
 BACKUP_SERVER_HOST = os.getenv("QUIZ_BACKUP_HOST", "")
 BACKUP_SERVER_USER = os.getenv("QUIZ_BACKUP_USER", "")

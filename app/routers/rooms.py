@@ -34,7 +34,7 @@ class CreateRoomRequest(BaseModel):
 
 
 class JoinRequest(BaseModel):
-    team: str  # 'A' or 'B'
+    team: str | None = None  # 'A' or 'B' or None for auto-assign
     role: str = "player"  # 'player' or 'observer'
 
 
@@ -209,9 +209,26 @@ async def join_room(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Already in this room")
 
-    team = req.team.upper()
-    if team not in ("A", "B"):
-        raise HTTPException(status_code=400, detail="Team must be A or B")
+    if req.team:
+        team = req.team.upper()
+        if team not in ("A", "B"):
+            raise HTTPException(status_code=400, detail="Team must be A or B")
+    else:
+        count_a_result = await db.execute(
+            select(RoomMember).where(
+                RoomMember.room_id == room.id,
+                RoomMember.team == "A",
+                RoomMember.role == "player",
+            )
+        )
+        count_b_result = await db.execute(
+            select(RoomMember).where(
+                RoomMember.room_id == room.id,
+                RoomMember.team == "B",
+                RoomMember.role == "player",
+            )
+        )
+        team = "A" if len(count_a_result.scalars().all()) <= len(count_b_result.scalars().all()) else "B"
 
     role = req.role
     if role not in ("player", "observer"):
@@ -269,6 +286,7 @@ async def leave_room(
     )
     member = member_result.scalar_one_or_none()
     if member:
+        was_active = room.status == "active"
         await db.delete(member)
         room.last_activity_at = utcnow()
         db.add(room)
@@ -278,7 +296,72 @@ async def leave_room(
 
         await broadcast_room_update(room.code)
 
+        if was_active:
+            from app.routers.ws import _check_team_empty
+
+            await _check_team_empty(room.code)
+
     return {"ok": True}
+
+
+class SwitchTeamRequest(BaseModel):
+    team: str
+
+
+@router.post("/{code}/switch-team")
+async def switch_team(
+    code: str,
+    req: SwitchTeamRequest,
+    player: dict = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Room).where(Room.code == code.upper()))
+    room = result.scalar_one_or_none()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.status != "waiting":
+        raise HTTPException(status_code=400, detail="Can only switch teams in waiting room")
+
+    target_team = req.team.upper()
+    if target_team not in ("A", "B"):
+        raise HTTPException(status_code=400, detail="Team must be A or B")
+
+    nickname = player.get("nickname", "Unknown")
+    member_result = await db.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.id,
+            RoomMember.nickname == nickname,
+        )
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="You are not in this room")
+    if member.team == target_team:
+        raise HTTPException(status_code=400, detail="Already on this team")
+    if member.role != "player":
+        raise HTTPException(status_code=400, detail="Observers cannot switch teams")
+
+    team_count_result = await db.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.id,
+            RoomMember.team == target_team,
+            RoomMember.role == "player",
+        )
+    )
+    if len(team_count_result.scalars().all()) >= MAX_PLAYERS_PER_TEAM:
+        raise HTTPException(status_code=400, detail=f"Team {target_team} is full")
+
+    member.team = target_team
+    db.add(member)
+    room.last_activity_at = utcnow()
+    db.add(room)
+    await db.commit()
+
+    from app.routers.ws import broadcast_room_update
+
+    await broadcast_room_update(room.code)
+
+    return {"ok": True, "team": target_team}
 
 
 @router.put("/{code}/nickname")

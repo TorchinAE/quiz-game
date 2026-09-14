@@ -148,7 +148,7 @@ if (joinCode && token) {
             const res = await fetch(`${BASE}/api/rooms/${joinCode}/join`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
-                body: JSON.stringify({team: 'A', role: 'player'})
+                body: JSON.stringify({role: 'player'})
             });
             if (res.ok) {
                 window.location.href = BASE + '/room/' + joinCode;
@@ -297,10 +297,9 @@ async function loadRooms() {
                         <span class="observers-count">👁 ${r.observers_count} наблюдателей</span>
                         <div class="room-actions">
                             ${r.status === 'waiting' ? `
-                                <button class="btn btn-primary btn-sm" onclick="joinRoom('${r.code}', 'A', 'player')">Играть A</button>
-                                <button class="btn btn-primary btn-sm" onclick="joinRoom('${r.code}', 'B', 'player')">Играть B</button>
+                                <button class="btn btn-primary btn-sm" onclick="joinRoom('${r.code}', null, 'player')">Играть</button>
                             ` : ''}
-                            <button class="btn btn-secondary btn-sm" onclick="joinRoom('${r.code}', 'A', 'observer')">Наблюдать</button>
+                            <button class="btn btn-secondary btn-sm" onclick="joinRoom('${r.code}', null, 'observer')">Наблюдать</button>
                         </div>
                     </div>
                 </div>
@@ -375,10 +374,12 @@ function copyToClipboard(text) {
 async function joinRoom(code, team, role) {
     if (!token) { showAuth(); return; }
     try {
+        const body = {role};
+        if (team) body.team = team;
         const res = await fetchAuth(`${BASE}/api/rooms/${code}/join`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
-            body: JSON.stringify({team, role})
+            body: JSON.stringify(body)
         });
         const data = await res.json();
         if (!res.ok) return showToast(data.detail, 'error');

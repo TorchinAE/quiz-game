@@ -107,7 +107,7 @@ class VisitTrackingMiddleware(BaseHTTPMiddleware):
                 page = "lobby"
             elif path.startswith("/room/"):
                 page = "room"
-            elif path == "/admin":
+            elif path == "/к2к1":
                 page = "admin"
             else:
                 page = path
@@ -132,10 +132,23 @@ async def lifespan(app: FastAPI):
 
     backup_task = asyncio.create_task(auto_backup_loop())
 
+    from app.telegram_bot import send_weekly_report
+
+    async def weekly_report_loop():
+        while True:
+            await asyncio.sleep(7 * 24 * 3600)
+            try:
+                await send_weekly_report()
+            except Exception:
+                pass
+
+    weekly_task = asyncio.create_task(weekly_report_loop())
+
     yield
 
     inactivity_task.cancel()
     backup_task.cancel()
+    weekly_task.cancel()
     if bot_task:
         await stop_bot()
 
@@ -195,9 +208,16 @@ async def page_game(request: Request):
     return templates.TemplateResponse("game.html", {"request": request})
 
 
-@app.get("/admin", response_class=HTMLResponse)
+@app.get("/к2к1", response_class=HTMLResponse)
 async def page_admin(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
+
+
+@app.get("/admin")
+async def redirect_admin():
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/к2к1")
 
 
 @app.get("/results", response_class=HTMLResponse)

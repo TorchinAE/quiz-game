@@ -84,13 +84,18 @@ async def notify_suggestion_pending(topic_id: int, name: str, suggested_by: str)
 
 async def notify_new_topic(topic_name: str):
     """Send notification when a new topic is created."""
-    if not _bot or not TELEGRAM_ADMIN_ID:
-        return
-    try:
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    if _bot and TELEGRAM_ADMIN_ID:
+        try:
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data="mn")]])
-        await _bot.send_message(chat_id=TELEGRAM_ADMIN_ID, text=f"🆕 Новая тема: {topic_name}", reply_markup=kb)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data="mn")]])
+            await _bot.send_message(chat_id=TELEGRAM_ADMIN_ID, text=f"🆕 Новая тема: {topic_name}", reply_markup=kb)
+        except Exception:
+            pass
+    try:
+        from app.email_notifier import notify_new_topic_email
+
+        await notify_new_topic_email(topic_name)
     except Exception:
         pass
 
@@ -153,5 +158,11 @@ async def send_weekly_report():
                 report += f"{i}. {p.nickname}: {p.total_score} очков\n"
 
         await _bot.send_message(chat_id=TELEGRAM_ADMIN_ID, text=report)
+        try:
+            from app.email_notifier import send_weekly_report_email
+
+            await send_weekly_report_email(report)
+        except Exception:
+            pass
     except Exception:
         pass

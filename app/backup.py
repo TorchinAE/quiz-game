@@ -99,5 +99,11 @@ async def auto_backup_loop():
             from app.telegram_bot import notify_backup_complete
 
             await notify_backup_complete()
+            try:
+                from app.email_notifier import notify_backup_complete_email
+
+                await notify_backup_complete_email()
+            except Exception:
+                pass
         except Exception:
             logger.exception("Auto backup failed")

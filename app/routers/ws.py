@@ -505,7 +505,7 @@ async def start_round(room_code: str, room):
 
 
 async def _grace_timeout(room_code: str, delay: float):
-    """After grace period, finish round even if not all players confirmed."""
+    """After grace period, finish round. Non-responding players are removed from the room."""
     try:
         await asyncio.sleep(delay)
     except asyncio.CancelledError:
@@ -528,25 +528,94 @@ async def _grace_timeout(room_code: str, delay: float):
                 RoomMember.role == "player",
             )
         )
-        all_members = [(m.id, m.nickname) for m in members_result.scalars().all()]
+        all_members = [(m.id, m.nickname, m.team) for m in members_result.scalars().all()]
 
     async with rs.lock:
-        for mid, mnickname in all_members:
+        for mid, mnickname, mteam in all_members:
             if mid not in rs.confirmed:
                 rs.dropped.add(mnickname)
-
-        # Cancel grace task ref
         rs.grace_task = None
 
-    # Notify about dropped players
-    for nickname in rs.dropped:
-        await broadcast_to_room(room_code, {"type": "player_dropped", "data": {"nickname": nickname}})
+    # Remove dropped players from the room
+    removed = []
+    async with async_session() as db:
+        for mid, mnickname, mteam in all_members:
+            if mnickname in rs.dropped:
+                member = (await db.execute(select(RoomMember).where(RoomMember.id == mid))).scalar_one_or_none()
+                if member:
+                    # Delete associated answers first (FK constraint)
+                    answers_q = select(RoomAnswer).where(RoomAnswer.room_member_id == mid)
+                    answers = (await db.execute(answers_q)).scalars().all()
+                    for a in answers:
+                        await db.delete(a)
+                    await db.delete(member)
+                    removed.append((mnickname, mteam))
+        await db.commit()
 
+    # Notify about removed players
+    for nickname, team in removed:
+        await broadcast_to_room(
+            room_code,
+            {
+                "type": "player_removed",
+                "data": {"nickname": nickname, "team": team, "reason": "timeout"},
+            },
+        )
+
+    # Check team-empty condition
+    if await _check_team_empty(room_code):
+        return
+
+    # Normal: finish the round
     async with async_session() as db:
         result = await db.execute(select(Room).where(Room.code == room_code))
         room = result.scalar_one_or_none()
         if room:
             await finish_round(room_code, room)
+
+
+async def _check_team_empty(room_code: str) -> bool:
+    """If either team has 0 players during an active game, end it immediately."""
+    async with async_session() as db:
+        result = await db.execute(select(Room).where(Room.code == room_code))
+        room = result.scalar_one_or_none()
+        if not room or room.status != "active":
+            return False
+
+        members_result = await db.execute(
+            select(RoomMember).where(RoomMember.room_id == room.id, RoomMember.role == "player")
+        )
+        members = members_result.scalars().all()
+        team_a = [m for m in members if m.team == "A"]
+        team_b = [m for m in members if m.team == "B"]
+
+        if not team_a or not team_b:
+            room.status = "finished"
+            room.round_phase = None
+            room.last_activity_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            await db.commit()
+
+            winner = "B" if not team_a else "A"
+            await broadcast_to_room(
+                room_code,
+                {
+                    "type": "game_over",
+                    "data": {
+                        "reason": "team_empty",
+                        "winner": winner,
+                        "team_a_score": sum(m.score for m in team_a),
+                        "team_b_score": sum(m.score for m in team_b),
+                        "team_a_members": [{"nickname": m.nickname, "score": m.score} for m in team_a],
+                        "team_b_members": [{"nickname": m.nickname, "score": m.score} for m in team_b],
+                    },
+                },
+            )
+
+            rs = _round_states.pop(room_code, None)
+            if rs and rs.grace_task:
+                rs.grace_task.cancel()
+            return True
+    return False
 
 
 async def finish_round(room_code: str, room):

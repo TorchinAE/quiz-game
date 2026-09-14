@@ -168,6 +168,7 @@ function connectWS() {
         if (msg.type === 'answer_result') onWSAnswerResult(msg.data);
         if (msg.type === 'player_ready') onWSPlayerReady(msg.data);
         if (msg.type === 'player_dropped') onWSDropped(msg.data);
+        if (msg.type === 'player_removed') onWSPlayerRemoved(msg.data);
         if (msg.type === 'scores') onWSScores(msg.data);
         if (msg.type === 'game_over') onWSGameOver(msg.data);
         if (msg.type === 'room_update') onWSRoomUpdate(msg.data);
@@ -196,6 +197,11 @@ function onWSPlayerReady(data) {
 
 function onWSDropped(data) {
     showToast(`${data.nickname} выбыл из раунда`, 'error');
+}
+
+function onWSPlayerRemoved(data) {
+    showToast(`${data.nickname} удалён из игры (таймаут)`, 'error');
+    loadState();
 }
 
 function onWSScores(data) {
@@ -267,6 +273,9 @@ function renderWaitingRoom(state) {
     const teamBMembers = state.team_b?.members || [];
     const myNickname = playerData ? playerData.nickname : null;
 
+    const myTeamA = teamAMembers.some(m => m.nickname === myNickname);
+    const myTeamB = teamBMembers.some(m => m.nickname === myNickname);
+
     function renderMember(m) {
         if (m.nickname === myNickname && !isObserver) {
             return `<span class="member-item"><span class="member-name">${m.nickname}</span> <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:0.75em" onclick="editNickname()">✏️</button></span>`;
@@ -274,14 +283,20 @@ function renderWaitingRoom(state) {
         return `<span class="member-item">${m.nickname}</span>`;
     }
 
+    const switchHint = !isObserver ? '<div style="font-size:0.8em;color:var(--text-secondary);margin-top:8px">Нажмите на другую команду, чтобы переключиться</div>' : '';
+
     container.innerHTML = `
-        <div class="card card-compact team-card">
-            <div class="team-name">Команда A</div>
+        <div class="card card-compact team-card ${myTeamA ? 'team-card-mine' : ''} ${!isObserver && myTeamB ? 'team-card-clickable' : ''}"
+             ${!isObserver && myTeamB ? 'onclick="switchTeam(\\'A\\')"' : ''}>
+            <div class="team-name">Команда A ${myTeamA ? '⭐' : ''}</div>
             <div class="team-members">${teamAMembers.map(renderMember).join(', ') || 'Пусто'}</div>
+            ${myTeamA ? switchHint : ''}
         </div>
-        <div class="card card-compact team-card">
-            <div class="team-name">Команда B</div>
+        <div class="card card-compact team-card ${myTeamB ? 'team-card-mine' : ''} ${!isObserver && myTeamA ? 'team-card-clickable' : ''}"
+             ${!isObserver && myTeamA ? 'onclick="switchTeam(\\'B\\')"' : ''}>
+            <div class="team-name">Команда B ${myTeamB ? '⭐' : ''}</div>
             <div class="team-members">${teamBMembers.map(renderMember).join(', ') || 'Пусто'}</div>
+            ${myTeamB ? switchHint : ''}
         </div>
     `;
 
@@ -524,11 +539,12 @@ function showGameOver(data) {
     const scoreB = data?.team_b_score ?? document.getElementById('score-b').textContent;
     const membersA = data?.team_a_members || [];
     const membersB = data?.team_b_members || [];
-    const winner = parseInt(scoreA) > parseInt(scoreB) ? 'A' : parseInt(scoreB) > parseInt(scoreA) ? 'B' : null;
+    const winner = data?.winner || (parseInt(scoreA) > parseInt(scoreB) ? 'A' : parseInt(scoreB) > parseInt(scoreA) ? 'B' : null);
 
+    const reasonMsg = data?.reason === 'team_empty' ? '<p style="text-align:center;color:#e94560;font-weight:600;margin-bottom:15px">Игра завершена: одна из команд осталась без игроков</p>' : '';
     document.getElementById('winner-image').style.display = winner ? 'block' : 'none';
 
-    document.getElementById('final-results').innerHTML = `
+    document.getElementById('final-results').innerHTML = reasonMsg + `
         <table class="results-table">
             <tr><th>Команда</th><th>Игроки</th><th>Очки</th></tr>
             <tr class="${winner === 'A' ? 'winner' : ''}">
@@ -561,6 +577,20 @@ async function editNickname() {
             playerData.nickname = data.nickname;
             localStorage.setItem('quiz_player', JSON.stringify(playerData));
         }
+        loadState();
+    } catch(e) { showToast('Ошибка сети', 'error'); }
+}
+
+async function switchTeam(targetTeam) {
+    try {
+        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/switch-team`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({team: targetTeam})
+        });
+        const data = await res.json();
+        if (!res.ok) return showToast(data.detail, 'error');
+        showToast(`Перешли в команду ${targetTeam}`, 'success');
         loadState();
     } catch(e) { showToast('Ошибка сети', 'error'); }
 }

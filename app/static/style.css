@@ -45,6 +45,9 @@ input:focus { border-color: #e94560; }
 .team-card img, .team-card .avatar { width: 80px; height: 80px; border-radius: 50%; margin-bottom: 10px; }
 .team-name { font-size: 1.3em; font-weight: 700; margin-bottom: 5px; }
 .team-score { font-size: 2em; font-weight: 800; color: #e94560; }
+.team-card-mine { border: 2px solid var(--color-primary) !important; box-shadow: 0 0 10px rgba(233,69,96,0.3); }
+.team-card-clickable { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.team-card-clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(233,69,96,0.2); }
 
 .question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .question-counter { color: #888; font-size: 0.9em; }

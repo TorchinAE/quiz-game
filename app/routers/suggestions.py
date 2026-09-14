@@ -71,6 +71,14 @@ async def create_suggestion(
     except Exception:
         pass
 
+    # Notify admin via email
+    try:
+        from app.email_notifier import notify_suggestion_pending_email
+
+        await notify_suggestion_pending_email(topic.id, topic.name, topic.suggested_by)
+    except Exception:
+        pass
+
     return {"id": topic.id, "name": topic.name, "status": topic.status}
 
 
