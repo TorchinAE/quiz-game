@@ -1,11 +1,13 @@
 """Email notification helpers. No-op when SMTP is not configured."""
 
 import logging
+from datetime import datetime
 from email.message import EmailMessage
+from urllib.parse import urlparse
 
 import aiosmtplib
 
-from app.config import ADMIN_MAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USE_SSL, SMTP_USE_TLS, SMTP_USER
+from app.config import ADMIN_MAIL, BASE_URL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USE_SSL, SMTP_USE_TLS, SMTP_USER
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,12 @@ def _smtp_configured() -> bool:
     return bool(ADMIN_MAIL and SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
 
 
-async def _send_email(subject: str, body: str):
+def _admin_url() -> str:
+    parsed = urlparse(BASE_URL)
+    return f"{parsed.scheme}://{parsed.netloc}/к2к1"
+
+
+async def _send_email(subject: str, body: str, html: str | None = None):
     if not _smtp_configured():
         return
 
@@ -22,7 +29,11 @@ async def _send_email(subject: str, body: str):
     msg["From"] = SMTP_USER
     msg["To"] = ADMIN_MAIL
     msg["Subject"] = subject
-    msg.set_content(body)
+    if html:
+        msg.set_content(body)
+        msg.add_alternative(html, subtype="html")
+    else:
+        msg.set_content(body)
 
     try:
         await aiosmtplib.send(
@@ -38,10 +49,73 @@ async def _send_email(subject: str, body: str):
         logger.exception("Failed to send email notification")
 
 
-async def notify_suggestion_pending_email(topic_id: int, name: str, suggested_by: str):
+async def notify_suggestion_pending_email(
+    topic_id: int,
+    name: str,
+    suggested_by: str,
+    created_at: datetime | None = None,
+    votes_up: int = 0,
+    votes_down: int = 0,
+):
+    base = _admin_url()
+    approve_url = f"{base}/api/suggestions/{topic_id}/approve"
+    reject_url = f"{base}/api/suggestions/{topic_id}/reject"
+    time_str = created_at.strftime("%d.%m.%Y %H:%M UTC") if created_at else "неизвестно"
+
+    plain = (
+        f"Тема «{name}» от {suggested_by} ({time_str}) ожидает модерации.\n"
+        f"Голоса: +{votes_up} / -{votes_down}\n\n"
+        f"Одобрить: {approve_url}\n"
+        f"Отклонить: {reject_url}\n"
+        f"Панель: {base}\n"
+    )
+
+    html = f"""\
+<html>
+<body style="font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:24px;">
+  <div style="max-width:520px;margin:0 auto;background:#16213e;border-radius:12px;padding:28px;">
+    <h2 style="color:#e94560;margin-top:0;">Quiz — новая тема на модерацию</h2>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr>
+        <td style="padding:6px 0;color:#888;">Тема</td>
+        <td style="padding:6px 0;font-weight:bold;color:#fff;">«{name}»</td>
+      </tr>
+      <tr><td style="padding:6px 0;color:#888;">От</td><td style="padding:6px 0;color:#fff;">{suggested_by}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;">Когда</td><td style="padding:6px 0;color:#fff;">{time_str}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;">ID</td><td style="padding:6px 0;color:#fff;">{topic_id}</td></tr>
+    </table>
+
+    <div style="background:#0f3460;border-radius:8px;padding:14px;margin:16px 0;text-align:center;">
+      <span style="color:#53d769;font-size:20px;font-weight:bold;">+{votes_up}</span>
+      <span style="color:#888;margin:0 12px;">/</span>
+      <span style="color:#e94560;font-size:20px;font-weight:bold;">-{votes_down}</span>
+      <div style="color:#888;font-size:12px;margin-top:4px;">голосов</div>
+    </div>
+
+    <div style="text-align:center;margin:24px 0;">
+      <a href="{approve_url}"
+         style="display:inline-block;background:#53d769;color:#000;text-decoration:none;
+                font-weight:bold;padding:14px 32px;border-radius:8px;margin:0 8px;font-size:15px;">
+        &#10003; Одобрить
+      </a>
+      <a href="{reject_url}"
+         style="display:inline-block;background:#e94560;color:#fff;text-decoration:none;
+                font-weight:bold;padding:14px 32px;border-radius:8px;margin:0 8px;font-size:15px;">
+        &#10007; Отклонить
+      </a>
+    </div>
+
+    <p style="text-align:center;margin-top:20px;">
+      <a href="{base}" style="color:#0f9dce;text-decoration:none;">Открыть панель администратора</a>
+    </p>
+  </div>
+</body>
+</html>"""
+
     await _send_email(
-        subject="Quiz: новая предложенная тема",
-        body=f"Тема «{name}» от {suggested_by} (id={topic_id}) ожидает модерации.",
+        subject=f"Quiz: новая тема «{name}» — модерация",
+        body=plain,
+        html=html,
     )
 
 

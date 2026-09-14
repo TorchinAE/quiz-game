@@ -1,9 +1,13 @@
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_player
+from app.config import BASE_URL
 from app.database import get_db
 from app.models import SuggestedTopic, TopicVote
 
@@ -75,7 +79,14 @@ async def create_suggestion(
     try:
         from app.email_notifier import notify_suggestion_pending_email
 
-        await notify_suggestion_pending_email(topic.id, topic.name, topic.suggested_by)
+        await notify_suggestion_pending_email(
+            topic.id,
+            topic.name,
+            topic.suggested_by,
+            created_at=topic.created_at,
+            votes_up=0,
+            votes_down=0,
+        )
     except Exception:
         pass
 
@@ -148,6 +159,38 @@ async def reject_suggestion(
     topic.status = "rejected"
     await db.commit()
     return {"ok": True, "status": "rejected"}
+
+
+@router.get("/{topic_id}/approve")
+async def approve_suggestion_link(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+    topic = result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    topic.status = "approved"
+    await db.commit()
+    admin_url = f"{urlparse(BASE_URL).scheme}://{urlparse(BASE_URL).netloc}/к2к1"
+    return RedirectResponse(url=admin_url, status_code=303)
+
+
+@router.get("/{topic_id}/reject")
+async def reject_suggestion_link(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
+    topic = result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    topic.status = "rejected"
+    await db.commit()
+    admin_url = f"{urlparse(BASE_URL).scheme}://{urlparse(BASE_URL).netloc}/к2к1"
+    return RedirectResponse(url=admin_url, status_code=303)
 
 
 class EditRequest(BaseModel):
