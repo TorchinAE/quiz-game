@@ -28,11 +28,13 @@ TELEGRAM_ADMIN_ID = os.getenv("QUIZ_TELEGRAM_ADMIN_ID", "")
 BASE_URL = os.getenv("QUIZ_BASE_URL", "")  # e.g. https://example.com/quiz
 
 # Email notifications
-ADMIN_MAIL = os.getenv("QUIZ_ADMIN_MAIL", "")
-SMTP_HOST = os.getenv("QUIZ_SMTP_HOST", "")
-SMTP_PORT = int(os.getenv("QUIZ_SMTP_PORT", "587"))
-SMTP_USER = os.getenv("QUIZ_SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("QUIZ_SMTP_PASSWORD", "")
+ADMIN_MAIL = os.getenv("ADMIN_MAIL", "")
+SMTP_HOST = os.getenv("ADMIN_MAIL_SERVER", "")
+SMTP_PORT = int(os.getenv("ADMIN_MAIL_PORT", "587"))
+SMTP_USER = os.getenv("ADMIN_MAIL_DEFAULT_SENDER", "")
+SMTP_PASSWORD = os.getenv("ADMIN_MAIL_PASSWORD", "")
+SMTP_USE_SSL = os.getenv("ADMIN_MAIL_USE_SSL", "false").lower() in ("true", "1", "yes")
+SMTP_USE_TLS = os.getenv("ADMIN_MAIL_USE_TLS", "true").lower() in ("true", "1", "yes")
 
 # Backup
 BACKUP_SERVER_HOST = os.getenv("QUIZ_BACKUP_HOST", "")

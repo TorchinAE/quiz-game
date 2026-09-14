@@ -5,7 +5,7 @@ from email.message import EmailMessage
 
 import aiosmtplib
 
-from app.config import ADMIN_MAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
+from app.config import ADMIN_MAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USE_SSL, SMTP_USE_TLS, SMTP_USER
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,8 @@ async def _send_email(subject: str, body: str):
             port=SMTP_PORT,
             username=SMTP_USER,
             password=SMTP_PASSWORD,
-            use_tls=False,
-            start_tls=True,
+            use_tls=SMTP_USE_SSL,
+            start_tls=SMTP_USE_TLS and not SMTP_USE_SSL,
         )
     except Exception:
         logger.exception("Failed to send email notification")

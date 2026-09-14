@@ -193,6 +193,13 @@ jobs:
               echo "QUIZ_BACKUP_KEY=${{ secrets.QUIZ_BACKUP_KEY }}"
               echo "QUIZ_BACKUP_PATH=${{ secrets.QUIZ_BACKUP_PATH }}"
               echo "QUIZ_BASE_URL=${{ secrets.QUIZ_BASE_URL }}"
+              echo "ADMIN_MAIL=${{ secrets.ADMIN_MAIL }}"
+              echo "ADMIN_MAIL_DEFAULT_SENDER=${{ secrets.ADMIN_MAIL_DEFAULT_SENDER }}"
+              echo "ADMIN_MAIL_PASSWORD=${{ secrets.ADMIN_MAIL_PASSWORD }}"
+              echo "ADMIN_MAIL_PORT=${{ secrets.ADMIN_MAIL_PORT }}"
+              echo "ADMIN_MAIL_SERVER=${{ secrets.ADMIN_MAIL_SERVER }}"
+              echo "ADMIN_MAIL_USE_SSL=${{ secrets.ADMIN_MAIL_USE_SSL }}"
+              echo "ADMIN_MAIL_USE_TLS=${{ secrets.ADMIN_MAIL_USE_TLS }}"
             } > /root/quiz-game/.env
 
             chmod 600 /root/quiz-game/.env

@@ -68,7 +68,7 @@ Key files:
 - Email (SMTP): `app/email_notifier.py` — no-op when SMTP not configured
 - Duplicated events: suggestion pending, backup complete, new topic, weekly report
 - Weekly report: auto-scheduled every 7 days in `main.py` lifespan (`weekly_report_loop`)
-- Config: `QUIZ_ADMIN_MAIL`, `QUIZ_SMTP_HOST`, `QUIZ_SMTP_PORT`, `QUIZ_SMTP_USER`, `QUIZ_SMTP_PASSWORD`
+- Config: `ADMIN_MAIL`, `ADMIN_MAIL_SERVER`, `ADMIN_MAIL_PORT`, `ADMIN_MAIL_DEFAULT_SENDER`, `ADMIN_MAIL_PASSWORD`, `ADMIN_MAIL_USE_SSL`, `ADMIN_MAIL_USE_TLS`
 
 ## Secrets & deploy
 
