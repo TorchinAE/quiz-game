@@ -271,6 +271,7 @@ select { width: 100%; padding: 10px; border: 2px solid #0f3460; border-radius: 8
 .option-readonly:hover { border-color: var(--bg-accent); background: var(--bg-primary); }
 
 .team-members { color: var(--text-secondary); font-size: 0.9em; margin-top: 5px; }
+.member-item { display: inline-flex; align-items: center; gap: 4px; }
 
 /* Email input type */
 input[type="email"] {

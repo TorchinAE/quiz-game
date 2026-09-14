@@ -159,7 +159,6 @@ function connectWS() {
 
     ws.onopen = () => {
         ws.send(JSON.stringify({type: 'auth', token: token || ''}));
-        loadState();
     };
 
     ws.onmessage = (e) => {
@@ -177,7 +176,9 @@ function connectWS() {
 
     ws.onclose = () => { setTimeout(connectWS, 2000); };
 }
-loadState();
+let _stateLoaded = false;
+function loadStateOnce() { if (!_stateLoaded) { _stateLoaded = true; loadState(); } }
+loadStateOnce();
 connectWS();
 
 // --- WS Handlers ---
@@ -264,7 +265,10 @@ async function loadState() {
         } else if (state.status === 'finished') {
             showSection('finished-card');
         }
-    } catch(e) { console.error('loadState error:', e); }
+    } catch(e) {
+        console.error('loadState error:', e);
+        showSection('waiting-section');
+    }
 }
 
 // --- Waiting room ---
