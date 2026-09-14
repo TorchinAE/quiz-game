@@ -54,6 +54,22 @@ Key files:
 - `loadState()` called on page load (not just on WebSocket open)
 - Answer is auto-submitted when timer expires (no manual submit button)
 
+## Game features
+
+- **Auto-assign**: joining via invite link (`?join=CODE`) auto-assigns to team with fewer players (`rooms.py:216-231`)
+- **Switch team**: players click the other team's card in waiting room (`POST /{code}/switch-team`, `room.html` `switchTeam()`)
+- **Grace timeout**: 40s (20s × multiplier 2). Non-responding players removed from room, broadcast `player_removed` with `reason: "timeout"` (`ws.py:507-574`)
+- **Auto-win**: if a team has 0 players during active game, other team wins immediately (`ws.py:577-618` `_check_team_empty()`)
+- **Admin panel**: route `/к2к1` (Cyrillic к), `/admin` redirects there (`main.py:198-207`)
+
+## Notifications
+
+- Telegram bot: `app/telegram_bot.py` + `app/bot/` package
+- Email (SMTP): `app/email_notifier.py` — no-op when SMTP not configured
+- Duplicated events: suggestion pending, backup complete, new topic, weekly report
+- Weekly report: auto-scheduled every 7 days in `main.py` lifespan (`weekly_report_loop`)
+- Config: `QUIZ_ADMIN_MAIL`, `QUIZ_SMTP_HOST`, `QUIZ_SMTP_PORT`, `QUIZ_SMTP_USER`, `QUIZ_SMTP_PASSWORD`
+
 ## Secrets & deploy
 
 - Admin creds: `QUIZ_ADMIN_USERNAME`, `QUIZ_ADMIN_PASSWORD` in `.env` (not in repo, in `.gitignore`)
