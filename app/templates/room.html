@@ -292,13 +292,13 @@ function renderWaitingRoom(state) {
 
     container.innerHTML = `
         <div class="card card-compact team-card ${myTeamA ? 'team-card-mine' : ''} ${!isObserver && myTeamB ? 'team-card-clickable' : ''}"
-             ${!isObserver && myTeamB ? 'onclick="switchTeam(\\'A\\')"' : ''}>
+             ${!isObserver && myTeamB ? 'onclick="switchTeam(\'A\')"' : ''}>
             <div class="team-name">Команда A ${myTeamA ? '⭐' : ''}</div>
             <div class="team-members">${teamAMembers.map(renderMember).join(', ') || 'Пусто'}</div>
             ${myTeamA ? switchHint : ''}
         </div>
         <div class="card card-compact team-card ${myTeamB ? 'team-card-mine' : ''} ${!isObserver && myTeamA ? 'team-card-clickable' : ''}"
-             ${!isObserver && myTeamA ? 'onclick="switchTeam(\\'B\\')"' : ''}>
+             ${!isObserver && myTeamA ? 'onclick="switchTeam(\'B\')"' : ''}>
             <div class="team-name">Команда B ${myTeamB ? '⭐' : ''}</div>
             <div class="team-members">${teamBMembers.map(renderMember).join(', ') || 'Пусто'}</div>
             ${myTeamB ? switchHint : ''}
