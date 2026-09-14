@@ -100,11 +100,11 @@ jobs:
             # Project
             # --------------------------------------
 
-            cd /home/mi/quiz-game
+            cd /root/quiz-game
 
             echo "Updating repository..."
 
-            git config --global --add safe.directory /home/mi/quiz-game
+            git config --global --add safe.directory /root/quiz-game
 
             git remote set-url origin https://github.com/TorchinAE/quiz-game.git
 
@@ -181,6 +181,8 @@ jobs:
             echo "Writing .env from GitHub Secrets..."
 
             {
+              echo "QUIZ_PORT=8080"
+              echo "QUIZ_DATABASE_URL=sqlite+aiosqlite:///./data/quiz.db"
               echo "QUIZ_SECRET_KEY=${{ secrets.QUIZ_SECRET_KEY }}"
               echo "QUIZ_ADMIN_USERNAME=${{ secrets.QUIZ_ADMIN_USERNAME }}"
               echo "QUIZ_ADMIN_PASSWORD=${{ secrets.QUIZ_ADMIN_PASSWORD }}"
@@ -191,9 +193,9 @@ jobs:
               echo "QUIZ_BACKUP_KEY=${{ secrets.QUIZ_BACKUP_KEY }}"
               echo "QUIZ_BACKUP_PATH=${{ secrets.QUIZ_BACKUP_PATH }}"
               echo "QUIZ_BASE_URL=${{ secrets.QUIZ_BASE_URL }}"
-            } > /home/mi/quiz-game/.env
+            } > /root/quiz-game/.env
 
-            chmod 600 /home/mi/quiz-game/.env
+            chmod 600 /root/quiz-game/.env
 
             # --------------------------------------
             # Restart application

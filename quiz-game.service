@@ -4,15 +4,15 @@ After=network.target
 
 [Service]
 Type=simple
-User=mi
-Group=mi
+User=root
+Group=root
 
-WorkingDirectory=/home/mi/quiz-game
+WorkingDirectory=/root/quiz-game
 
-Environment="PATH=/home/mi/quiz-game/venv/bin"
-EnvironmentFile=/home/mi/quiz-game/.env
+Environment="PATH=/root/quiz-game/venv/bin"
+EnvironmentFile=/root/quiz-game/.env
 
-ExecStart=/home/mi/quiz-game/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080
+ExecStart=/root/quiz-game/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080
 
 Restart=always
 RestartSec=3
