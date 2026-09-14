@@ -3,8 +3,9 @@
 import asyncio
 import os
 import sys
+from email.message import EmailMessage
 
-# Load .env manually
+# Load .env manually before importing app.config
 env_path = os.path.join(os.path.dirname(__file__), ".env")
 if os.path.exists(env_path):
     with open(env_path) as f:
@@ -14,7 +15,17 @@ if os.path.exists(env_path):
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k.strip(), v.strip())
 
-from app.config import ADMIN_MAIL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USE_SSL, SMTP_USE_TLS, SMTP_USER
+import aiosmtplib  # noqa: E402
+
+from app.config import (  # noqa: E402
+    ADMIN_MAIL,
+    SMTP_HOST,
+    SMTP_PASSWORD,
+    SMTP_PORT,
+    SMTP_USE_SSL,
+    SMTP_USE_TLS,
+    SMTP_USER,
+)
 
 
 async def main():
@@ -29,9 +40,6 @@ async def main():
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASSWORD, ADMIN_MAIL]):
         print("\nERROR: SMTP not fully configured. Check .env variables.")
         sys.exit(1)
-
-    import aiosmtplib
-    from email.message import EmailMessage
 
     msg = EmailMessage()
     msg["From"] = SMTP_USER
