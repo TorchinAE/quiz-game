@@ -607,6 +607,11 @@ input[type="email"]:focus { border-color: var(--color-primary); }
     font-size: 0.85em;
     white-space: nowrap;
 }
+.vote-date {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    white-space: nowrap;
+}
 .vote-card-actions {
     display: flex;
     gap: 8px;

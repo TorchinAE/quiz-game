@@ -63,6 +63,13 @@ class QuestionUpdate(BaseModel):
     difficulty: int | None = None
 
 
+class UserUpdate(BaseModel):
+    nickname: str | None = None
+    email: str | None = None
+    total_score: int | None = None
+    games_played: int | None = None
+
+
 def require_admin(request: Request):
     token = get_admin_token(request)
     payload = verify_token(token) if token else None
@@ -381,9 +388,14 @@ async def get_game_stats(request: Request, days: int = 30, db: AsyncSession = De
 
 
 @router.get("/api/admin/users")
-async def list_users(request: Request, db: AsyncSession = Depends(get_db)):
+async def list_users(request: Request, q: str | None = None, db: AsyncSession = Depends(get_db)):
     require_admin(request)
-    result = await db.execute(select(Player).order_by(Player.created_at.desc()))
+    stmt = select(Player)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where((Player.nickname.ilike(like)) | (Player.email.ilike(like)))
+    stmt = stmt.order_by(Player.created_at.desc())
+    result = await db.execute(stmt)
     players = result.scalars().all()
     return [
         {
@@ -396,6 +408,32 @@ async def list_users(request: Request, db: AsyncSession = Depends(get_db)):
         }
         for p in players
     ]
+
+
+@router.put("/api/admin/users/{user_id}")
+async def update_user(user_id: int, req: UserUpdate, request: Request, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    result = await db.execute(select(Player).where(Player.id == user_id))
+    player = result.scalar_one_or_none()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    if req.nickname is not None:
+        player.nickname = req.nickname
+    if req.email is not None:
+        player.email = req.email
+    if req.total_score is not None:
+        player.total_score = req.total_score
+    if req.games_played is not None:
+        player.games_played = req.games_played
+    await db.commit()
+    return {
+        "id": player.id,
+        "nickname": player.nickname,
+        "email": player.email,
+        "total_score": player.total_score,
+        "games_played": player.games_played,
+        "created_at": player.created_at.isoformat() if player.created_at else None,
+    }
 
 
 # --- Suggestions (admin) ---

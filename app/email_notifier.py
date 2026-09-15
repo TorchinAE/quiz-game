@@ -161,3 +161,65 @@ async def send_weekly_report_email(report: str):
         subject="Quiz: еженедельный отчёт",
         body=report,
     )
+
+
+async def notify_voting_results_email(
+    topic_id: int,
+    name: str,
+    suggested_by: str,
+    created_at: datetime | None,
+    rating: int,
+    votes_up: int,
+    votes_down: int,
+    status: str,
+):
+    admin = _admin_url()
+    time_str = created_at.strftime("%d.%m.%Y") if created_at else "—"
+    status_label = {"approved": "Одобрено", "rejected": "Отклонено"}.get(status, status)
+
+    plain = (
+        f"Голосование за тему «{name}» завершено (2 недели).\n\n"
+        f"Автор: {suggested_by}\n"
+        f"Дата создания: {time_str}\n"
+        f"Итого: +{votes_up} / -{votes_down} (рейтинг: {rating})\n"
+        f"Статус: {status_label}\n\n"
+        f"Панель: {admin}\n"
+    )
+
+    html = f"""\
+<html>
+<body style="font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:24px;">
+  <div style="max-width:520px;margin:0 auto;background:#16213e;border-radius:12px;padding:28px;">
+    <h2 style="color:#e94560;margin-top:0;">Quiz — результаты голосования</h2>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr>
+        <td style="padding:6px 0;color:#888;">Тема</td>
+        <td style="padding:6px 0;font-weight:bold;color:#fff;">«{name}»</td>
+      </tr>
+      <tr><td style="padding:6px 0;color:#888;">От</td><td style="padding:6px 0;color:#fff;">{suggested_by}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;">Создано</td><td style="padding:6px 0;color:#fff;">{time_str}</td></tr>
+      <tr>
+        <td style="padding:6px 0;color:#888;">Статус</td>
+        <td style="padding:6px 0;color:#fff;">{status_label}</td>
+      </tr>
+    </table>
+
+    <div style="background:#0f3460;border-radius:8px;padding:14px;margin:16px 0;text-align:center;">
+      <span style="color:#53d769;font-size:20px;font-weight:bold;">+{votes_up}</span>
+      <span style="color:#888;margin:0 12px;">/</span>
+      <span style="color:#e94560;font-size:20px;font-weight:bold;">-{votes_down}</span>
+      <div style="color:#888;font-size:12px;margin-top:4px;">рейтинг: {rating}</div>
+    </div>
+
+    <p style="text-align:center;margin-top:20px;">
+      <a href="{admin}" style="color:#0f9dce;text-decoration:none;">Открыть панель администратора</a>
+    </p>
+  </div>
+</body>
+</html>"""
+
+    await _send_email(
+        subject=f"Quiz: результаты голосования «{name}»",
+        body=plain,
+        html=html,
+    )

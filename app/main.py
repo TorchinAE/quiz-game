@@ -8,11 +8,11 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import async_session, init_db
-from app.models import Question, Room, Topic, VisitStats
+from app.models import Question, Room, SuggestedTopic, Topic, TopicVote, VisitStats
 from app.routers import admin, auth_router, game, leaderboard, rooms, suggestions, ws
 from app.settings import get_room_inactivity_timeout
 
@@ -55,6 +55,47 @@ async def load_questions_from_csv():
                 db.add(question)
 
         await db.commit()
+
+
+async def voting_results_checker():
+    """Check for voting polls older than 2 weeks and send results email."""
+    while True:
+        try:
+            await asyncio.sleep(3600)  # check every hour
+            from datetime import datetime, timedelta, timezone
+
+            from app.email_notifier import notify_voting_results_email
+
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=14)
+            async with async_session() as db:
+                result = await db.execute(
+                    select(SuggestedTopic).where(
+                        SuggestedTopic.results_sent == False,  # noqa: E712
+                        SuggestedTopic.created_at < cutoff,
+                    )
+                )
+                expired = result.scalars().all()
+                for topic in expired:
+                    tid = TopicVote.suggested_topic_id == topic.id
+                    rating_result = await db.execute(select(func.coalesce(func.sum(TopicVote.vote), 0)).where(tid))
+                    rating = rating_result.scalar() or 0
+                    ups = await db.execute(select(func.count(TopicVote.id)).where(tid, TopicVote.vote == 1))
+                    downs = await db.execute(select(func.count(TopicVote.id)).where(tid, TopicVote.vote == -1))
+                    await notify_voting_results_email(
+                        topic_id=topic.id,
+                        name=topic.name,
+                        suggested_by=topic.suggested_by,
+                        created_at=topic.created_at,
+                        rating=rating,
+                        votes_up=ups.scalar() or 0,
+                        votes_down=downs.scalar() or 0,
+                        status=topic.status,
+                    )
+                    topic.results_sent = True
+                    db.add(topic)
+                await db.commit()
+        except Exception:
+            pass
 
 
 async def inactivity_checker():
@@ -146,11 +187,14 @@ async def lifespan(app: FastAPI):
 
     weekly_task = asyncio.create_task(weekly_report_loop())
 
+    voting_results_task = asyncio.create_task(voting_results_checker())
+
     yield
 
     inactivity_task.cancel()
     backup_task.cancel()
     weekly_task.cancel()
+    voting_results_task.cancel()
     if bot_task:
         await stop_bot()
 

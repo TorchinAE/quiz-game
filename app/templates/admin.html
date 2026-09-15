@@ -73,6 +73,7 @@
             <section id="sec-users" class="admin-section" style="display:none">
                 <div class="admin-section-header">
                     <h2>Пользователи</h2>
+                    <input type="text" id="users-search" placeholder="Поиск по никнейму или email…" oninput="loadUsers()" style="margin-bottom:0;max-width:260px">
                 </div>
                 <div id="users-list"></div>
             </section>
@@ -232,6 +233,34 @@
         <div id="image-browser-grid" class="image-browser-grid"></div>
         <div style="margin-top:15px;text-align:right">
             <button class="btn btn-secondary" onclick="document.getElementById('image-browser-modal').style.display='none'">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<!-- User Edit Modal -->
+<div class="modal-overlay" id="user-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal" style="max-width:500px">
+        <h3>Редактировать пользователя</h3>
+        <input type="hidden" id="user-id">
+        <div class="form-group">
+            <label>Никнейм</label>
+            <input type="text" id="user-nickname">
+        </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="user-email">
+        </div>
+        <div class="form-group">
+            <label>Очки</label>
+            <input type="number" id="user-score" min="0">
+        </div>
+        <div class="form-group">
+            <label>Игр сыграно</label>
+            <input type="number" id="user-games" min="0">
+        </div>
+        <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" onclick="saveUser()">Сохранить</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('user-modal').style.display='none'">Отмена</button>
         </div>
     </div>
 </div>
@@ -513,6 +542,7 @@ async function loadVotes() {
                     <span class="vote-card-status" style="color:${statusColors[s.status] || '#888'}">${statusLabels[s.status] || s.status}</span>
                     <span class="vote-rating">${s.rating > 0 ? '+' : ''}${s.rating}</span>
                     <span class="vote-author">от ${s.suggested_by}</span>
+                    <span class="vote-date">${s.created_at ? new Date(s.created_at).toLocaleDateString('ru-RU') : ''}</span>
                 </div>
                 ${s.status === 'pending' ? `
                     <div class="vote-card-actions">
@@ -547,13 +577,15 @@ async function loadTopPlayers() {
 
 async function loadUsers() {
     try {
-        const res = await fetch(BASE + '/api/admin/users', {headers: headers()});
+        const q = document.getElementById('users-search').value.trim();
+        const url = q ? `${BASE}/api/admin/users?q=${encodeURIComponent(q)}` : BASE + '/api/admin/users';
+        const res = await fetch(url, {headers: headers()});
         if (!res.ok) { document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Ошибка загрузки</p>'; return; }
         const users = await res.json();
-        if (!users.length) { document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Нет зарегистрированных пользователей</p>'; return; }
+        if (!users.length) { document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Ничего не найдено</p>'; return; }
         document.getElementById('users-list').innerHTML = `
             <table class="admin-table">
-                <tr><th>#</th><th>Никнейм</th><th>Email</th><th>Очки</th><th>Игр</th><th>Дата регистрации</th></tr>
+                <tr><th>#</th><th>Никнейм</th><th>Email</th><th>Очки</th><th>Игр</th><th>Дата регистрации</th><th></th></tr>
                 ${users.map((u, i) => `<tr>
                     <td>${i+1}</td>
                     <td>${u.nickname}</td>
@@ -561,10 +593,33 @@ async function loadUsers() {
                     <td>${u.total_score}</td>
                     <td>${u.games_played}</td>
                     <td>${u.created_at ? new Date(u.created_at).toLocaleDateString('ru-RU') : '—'}</td>
+                    <td><button class="btn btn-secondary btn-sm" onclick='editUser(${JSON.stringify(u)})'>✏️</button></td>
                 </tr>`).join('')}
             </table>
         `;
     } catch { document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Ошибка загрузки</p>'; }
+}
+
+function editUser(u) {
+    document.getElementById('user-modal').style.display = 'flex';
+    document.getElementById('user-id').value = u.id;
+    document.getElementById('user-nickname').value = u.nickname;
+    document.getElementById('user-email').value = u.email;
+    document.getElementById('user-score').value = u.total_score;
+    document.getElementById('user-games').value = u.games_played;
+}
+
+async function saveUser() {
+    const id = document.getElementById('user-id').value;
+    const body = {
+        nickname: document.getElementById('user-nickname').value,
+        email: document.getElementById('user-email').value,
+        total_score: parseInt(document.getElementById('user-score').value) || 0,
+        games_played: parseInt(document.getElementById('user-games').value) || 0,
+    };
+    await fetch(`${BASE}/api/admin/users/${id}`, {method: 'PUT', headers: headers(), body: JSON.stringify(body)});
+    document.getElementById('user-modal').style.display = 'none';
+    loadUsers();
 }
 
 function showError(elId, msg) {

@@ -76,10 +76,8 @@
         <!-- Suggest topic -->
         <div class="sidebar-section sidebar-sticky" style="margin-bottom:20px">
             <h3>💡 Предложить тему</h3>
-            <div style="display:flex;gap:8px">
-                <input type="text" id="suggest-input" placeholder="Название темы (до 120 симв.)" maxlength="120" style="margin-bottom:0;flex:1">
-                <button class="btn btn-primary btn-sm" onclick="suggestTopic()">Предложить</button>
-            </div>
+            <input type="text" id="suggest-input" placeholder="Название темы (до 120 симв.)" maxlength="120" style="margin-bottom:8px">
+            <button class="btn btn-primary btn-sm btn-block" onclick="suggestTopic()">Предложить</button>
         </div>
         <!-- Voting -->
         <div class="sidebar-section" style="margin-bottom:20px">
@@ -89,7 +87,7 @@
             </div>
         </div>
         <!-- Leaderboard -->
-        <div class="sidebar-section">
+        <div class="sidebar-section" style="margin-bottom:20px">
             <h3>🏆 Топ-5 участников</h3>
             <div id="leaderboard-list">
                 <div class="leaderboard-empty">Пока нет зарегистрированных игроков</div>
