@@ -220,7 +220,7 @@ async def page_admin(request: Request):
 async def redirect_admin():
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse(url="/k2k1")
+    return RedirectResponse(url="/quiz/k2k1")
 
 
 @app.get("/results", response_class=HTMLResponse)
