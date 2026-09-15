@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import create_access_token, get_admin_token, verify_admin, verify_token
 from app.database import get_db
-from app.models import Player, Question, Room, SiteSetting, Topic, VisitStats
+from app.models import Player, Question, Room, SiteSetting, SuggestedTopic, Topic, TopicVote, VisitStats
 
 router = APIRouter(tags=["admin"])
 
@@ -375,6 +375,34 @@ async def get_game_stats(request: Request, days: int = 30, db: AsyncSession = De
         .order_by(func.date(Room.started_at))
     )
     return [{"date": str(row.date), "count": row.count} for row in result.all()]
+
+
+# --- Suggestions (admin) ---
+
+
+@router.get("/api/admin/suggestions")
+async def list_all_suggestions(request: Request, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    result = await db.execute(select(SuggestedTopic).order_by(SuggestedTopic.created_at.desc()))
+    topics = result.scalars().all()
+
+    items = []
+    for t in topics:
+        rating_result = await db.execute(
+            select(func.coalesce(func.sum(TopicVote.vote), 0)).where(TopicVote.suggested_topic_id == t.id)
+        )
+        rating = rating_result.scalar() or 0
+        items.append(
+            {
+                "id": t.id,
+                "name": t.name,
+                "suggested_by": t.suggested_by,
+                "status": t.status,
+                "rating": rating,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+        )
+    return items
 
 
 # --- Backup ---

@@ -497,21 +497,33 @@ async function toggleQuestion(id) {
     loadQuestions();
 }
 
-// --- Placeholder sections ---
+// --- Suggestions ---
 async function loadVotes() {
     try {
-        const res = await fetch(BASE + '/api/suggestions', {headers: headers()});
-        if (!res.ok) { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Раздел будет доступен после реализации Phase 5</p>'; return; }
+        const res = await fetch(BASE + '/api/admin/suggestions', {headers: headers()});
+        if (!res.ok) { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Ошибка загрузки</p>'; return; }
         const items = await res.json();
         if (!items.length) { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Нет предложенных тем</p>'; return; }
+        const statusLabels = {pending: 'На модерации', approved: 'Одобрено', rejected: 'Отклонено'};
+        const statusColors = {pending: '#fdcb6e', approved: '#00b894', rejected: '#e94560'};
         document.getElementById('votes-list').innerHTML = items.map(s => `
             <div class="vote-card">
                 <span class="vote-name">${s.name}</span>
+                <span style="color:${statusColors[s.status] || '#888'};font-size:0.85em;font-weight:600">${statusLabels[s.status] || s.status}</span>
                 <span class="vote-rating">${s.rating > 0 ? '+' : ''}${s.rating}</span>
                 <span class="vote-author">от ${s.suggested_by}</span>
+                ${s.status === 'pending' ? `
+                    <button class="btn btn-sm" style="background:#00b894" onclick="moderateSuggestion(${s.id},'approve')">✓ Одобрить</button>
+                    <button class="btn btn-sm" style="background:#e94560" onclick="moderateSuggestion(${s.id},'reject')">✗ Отклонить</button>
+                ` : ''}
             </div>
         `).join('');
-    } catch { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Раздел будет доступен после реализации Phase 5</p>'; }
+    } catch { document.getElementById('votes-list').innerHTML = '<p style="color:var(--text-secondary)">Ошибка загрузки</p>'; }
+}
+
+async function moderateSuggestion(id, action) {
+    await fetch(`${BASE}/api/suggestions/${id}/${action}`, {method: 'POST', headers: headers()});
+    loadVotes();
 }
 
 async function loadTopPlayers() {

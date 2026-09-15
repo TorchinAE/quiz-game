@@ -633,6 +633,10 @@ async def _check_team_empty(room_code: str) -> bool:
 
 async def finish_round(room_code: str, room):
     """Calculate scores, send answer_result, schedule reading phase."""
+    import logging
+
+    log = logging.getLogger(__name__)
+    log.info("finish_round called for room %s", room_code)
     rs = _round_states.get(room_code)
     if not rs or rs.finished:
         return
@@ -730,6 +734,9 @@ async def finish_round(room_code: str, room):
 
 async def _reading_phase(room_code: str, delay: float):
     """After reading time, advance to next question."""
+    import logging
+
+    log = logging.getLogger(__name__)
     try:
         await asyncio.sleep(delay)
     except asyncio.CancelledError:
@@ -739,6 +746,8 @@ async def _reading_phase(room_code: str, delay: float):
         result = await db.execute(select(Room).where(Room.code == room_code))
         room = result.scalar_one_or_none()
         if not room or room.status != "active":
+            status = room.status if room else "None"
+            log.info("_reading_phase: room %s not active (%s)", room_code, status)
             return
 
         question_ids = room.get_questions_order()
@@ -746,6 +755,8 @@ async def _reading_phase(room_code: str, delay: float):
 
         if next_idx >= len(question_ids):
             # Game over
+            total = len(question_ids)
+            log.info("_reading_phase: game over room %s (%d/%d)", room_code, next_idx, total)
             room.status = "finished"
             room.round_phase = None
             room.last_activity_at = datetime.now(timezone.utc).replace(tzinfo=None)
