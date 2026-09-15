@@ -148,17 +148,13 @@ select { width: 100%; padding: 10px; border: 2px solid #0f3460; border-radius: 8
 .lobby-main { flex: 1; min-width: 0; }
 .lobby-sidebar { width: 280px; flex-shrink: 0; }
 .lobby-header {
+    margin-bottom: 25px;
+}
+.lobby-header-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 25px;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-.lobby-header-main {
-    display: flex;
-    align-items: center;
-    gap: 14px;
+    margin-bottom: 8px;
 }
 .lobby-header h1 { margin-bottom: 0; font-size: 2em; }
 .lobby-auth-bar { display: flex; align-items: center; gap: 12px; }

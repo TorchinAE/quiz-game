@@ -1,12 +1,13 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_player
 from app.database import get_db
-from app.email_notifier import _admin_url
 from app.models import SuggestedTopic, TopicVote
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
@@ -65,11 +66,11 @@ async def create_suggestion(
     await db.commit()
     await db.refresh(topic)
 
-    # Notify admin via Telegram
+    # Notify admin via Telegram (fire-and-forget)
     try:
         from app.telegram_bot import notify_suggestion_pending
 
-        await notify_suggestion_pending(topic.id, topic.name, topic.suggested_by)
+        asyncio.create_task(notify_suggestion_pending(topic.id, topic.name, topic.suggested_by))
     except Exception:
         pass
 
@@ -159,6 +160,23 @@ async def reject_suggestion(
     return {"ok": True, "status": "rejected"}
 
 
+def _confirmation_page(title: str, message: str, color: str) -> HTMLResponse:
+    return HTMLResponse(
+        f"""<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<style>
+body{{font-family:'Segoe UI',Tahoma,sans-serif;background:#1a1a2e;color:#eee;
+display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}}
+.box{{background:#16213e;border-radius:16px;padding:40px;text-align:center;
+max-width:420px;box-shadow:0 4px 20px rgba(0,0,0,.3)}}
+h2{{color:{color};margin:0 0 12px}}p{{color:#888;line-height:1.5}}
+a{{color:#0f9dce;text-decoration:none}}a:hover{{text-decoration:underline}}
+</style></head><body><div class="box"><h2>{title}</h2><p>{message}</p>
+<p><a href="/quiz/lobby">Перейти в лобби</a></p></div></body></html>"""
+    )
+
+
 @router.get("/{topic_id}/approve")
 async def approve_suggestion_link(
     topic_id: int,
@@ -167,12 +185,11 @@ async def approve_suggestion_link(
     result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
     topic = result.scalar_one_or_none()
     if not topic:
-        raise HTTPException(status_code=404, detail="Topic not found")
+        return _confirmation_page("Ошибка", "Тема не найдена", "#e94560")
 
     topic.status = "approved"
     await db.commit()
-    admin_url = _admin_url()
-    return RedirectResponse(url=admin_url, status_code=303)
+    return _confirmation_page("Тема одобрена", f"«{topic.name}» одобрена и теперь доступна для голосования.", "#00b894")
 
 
 @router.get("/{topic_id}/reject")
@@ -183,12 +200,11 @@ async def reject_suggestion_link(
     result = await db.execute(select(SuggestedTopic).where(SuggestedTopic.id == topic_id))
     topic = result.scalar_one_or_none()
     if not topic:
-        raise HTTPException(status_code=404, detail="Topic not found")
+        return _confirmation_page("Ошибка", "Тема не найдена", "#e94560")
 
     topic.status = "rejected"
     await db.commit()
-    admin_url = _admin_url()
-    return RedirectResponse(url=admin_url, status_code=303)
+    return _confirmation_page("Тема отклонена", f"«{topic.name}» отклонена.", "#e94560")
 
 
 class EditRequest(BaseModel):
