@@ -3,10 +3,11 @@ import csv
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -224,3 +225,23 @@ async def redirect_admin():
 @app.get("/results", response_class=HTMLResponse)
 async def page_results(request: Request):
     return templates.TemplateResponse("results.html", {"request": request})
+
+
+class FeedbackRequest(BaseModel):
+    name: str
+    email: str
+    message: str
+
+
+@app.post("/api/feedback")
+async def submit_feedback(req: FeedbackRequest):
+    if not req.name.strip() or not req.email.strip() or not req.message.strip():
+        raise HTTPException(status_code=400, detail="Все поля обязательны")
+    if len(req.message) > 5000:
+        raise HTTPException(status_code=400, detail="Сообщение слишком длинное")
+    from app.email_notifier import _send_email
+
+    subject = f"Предложения и обратная связь — {req.name.strip()}"
+    body = f"От: {req.name.strip()} <{req.email.strip()}>\n\n{req.message.strip()}"
+    await _send_email(subject=subject, body=body)
+    return {"ok": True}

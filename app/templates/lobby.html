@@ -111,6 +111,28 @@
         <button class="btn btn-success btn-block" onclick="goToPrivateRoom()">Перейти в комнату</button>
     </div>
 </div>
+
+<!-- Feedback link -->
+<div style="text-align:center;margin-top:30px;padding:20px 0">
+    <a href="#" onclick="openFeedbackModal();return false" style="color:var(--color-primary);text-decoration:none;font-size:0.95em">
+        Предложения и обратная связь
+    </a>
+</div>
+
+<!-- Feedback modal -->
+<div id="feedback-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeFeedbackModal()">
+    <div class="card" style="max-width:460px">
+        <h2 style="color:var(--color-primary);margin-bottom:15px">Предложения и обратная связь</h2>
+        <input type="text" id="feedback-name" placeholder="Ваше имя" maxlength="100">
+        <input type="email" id="feedback-email" placeholder="Ваш email" maxlength="200">
+        <textarea id="feedback-message" rows="5" placeholder="Сообщение..." style="width:100%;padding:14px;border:2px solid var(--bg-accent);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);font-size:1em;margin-bottom:15px;resize:vertical"></textarea>
+        <div id="feedback-error" class="error" style="display:none"></div>
+        <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" onclick="submitFeedback()" style="flex:1">Отправить</button>
+            <button class="btn btn-secondary" onclick="closeFeedbackModal()">Отмена</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -528,6 +550,46 @@ function showError(msg) {
     } else {
         alert(msg);
     }
+}
+
+// --- Feedback ---
+function openFeedbackModal() {
+    document.getElementById('feedback-modal').style.display = 'flex';
+    if (playerData) {
+        document.getElementById('feedback-name').value = playerData.nickname || '';
+        if (playerData.is_registered) {
+            document.getElementById('feedback-email').value = playerData.email || '';
+        }
+    }
+}
+
+function closeFeedbackModal() {
+    document.getElementById('feedback-modal').style.display = 'none';
+}
+
+async function submitFeedback() {
+    const name = document.getElementById('feedback-name').value.trim();
+    const email = document.getElementById('feedback-email').value.trim();
+    const message = document.getElementById('feedback-message').value.trim();
+    if (!name || !email || !message) {
+        showToast('Заполните все поля', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(BASE + '/api/feedback', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, email, message})
+        });
+        if (res.ok) {
+            showToast('Сообщение отправлено!', 'success');
+            closeFeedbackModal();
+            document.getElementById('feedback-message').value = '';
+        } else {
+            const data = await res.json();
+            showToast(data.detail || 'Ошибка', 'error');
+        }
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 </script>
 {% endblock %}
