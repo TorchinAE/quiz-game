@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.auth import verify_token
 from app.config import ANSWER_GRACE_MULTIPLIER, ANSWER_TIME_SECONDS, READING_TIME_SECONDS
 from app.database import async_session
-from app.models import Game, Question, Room, RoomAnswer, RoomMember, Team, TeamAnswer
+from app.models import Game, Player, Question, Room, RoomAnswer, RoomMember, Team, TeamAnswer
 
 router = APIRouter()
 
@@ -595,6 +595,17 @@ async def _check_team_empty(room_code: str) -> bool:
             room.last_activity_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.commit()
 
+            # Update registered players' total_score and games_played
+            for m in members:
+                if m.player_id and m.role == "player":
+                    result = await db.execute(select(Player).where(Player.id == m.player_id))
+                    player = result.scalar_one_or_none()
+                    if player:
+                        player.total_score += m.score
+                        player.games_played += 1
+                        db.add(player)
+            await db.commit()
+
             winner = "B" if not team_a else "A"
             await broadcast_to_room(
                 room_code,
@@ -834,6 +845,17 @@ async def broadcast_game_over_to_room(room_code: str):
 
         members_result = await db.execute(select(RoomMember).where(RoomMember.room_id == room.id))
         members = members_result.scalars().all()
+
+        # Update registered players' total_score and games_played
+        for m in members:
+            if m.player_id and m.role == "player":
+                result = await db.execute(select(Player).where(Player.id == m.player_id))
+                player = result.scalar_one_or_none()
+                if player:
+                    player.total_score += m.score
+                    player.games_played += 1
+                    db.add(player)
+        await db.commit()
 
         team_a_score = sum(m.score for m in members if m.team == "A" and m.role == "player")
         team_b_score = sum(m.score for m in members if m.team == "B" and m.role == "player")
