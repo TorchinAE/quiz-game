@@ -9,6 +9,9 @@
         <a href="/quiz/" class="btn btn-primary">На главную</a>
     </div>
 </div>
+<div id="support-banner" class="card" style="display:none;margin-top:20px;text-align:center">
+    <p id="support-banner-text" style="color:var(--text-secondary);font-size:1em;line-height:1.6"></p>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -30,5 +33,15 @@ async function load() {
     `;
 }
 load();
+(async () => {
+    try {
+        const res = await fetch(BASE + '/api/settings/support_banner');
+        const data = await res.json();
+        if (data.enabled && data.value) {
+            document.getElementById('support-banner-text').textContent = data.value;
+            document.getElementById('support-banner').style.display = 'block';
+        }
+    } catch(e) {}
+})();
 </script>
 {% endblock %}

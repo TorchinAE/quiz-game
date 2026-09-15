@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import create_access_token, get_admin_token, verify_admin, verify_token
 from app.database import get_db
-from app.models import Player, Question, Room, Topic, VisitStats
+from app.models import Player, Question, Room, SiteSetting, Topic, VisitStats
 
 router = APIRouter(tags=["admin"])
 
@@ -402,3 +402,40 @@ async def download_backup(request: Request):
         raise HTTPException(status_code=404, detail="No backups found")
     latest = archives[-1]
     return FileResponse(latest, filename=os.path.basename(latest), media_type="application/gzip")
+
+
+@router.get("/api/admin/settings/{key}")
+async def get_setting(key: str, request: Request, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    result = await db.execute(select(SiteSetting).where(SiteSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        return {"key": key, "value": "", "enabled": False}
+    return {"key": setting.key, "value": setting.value, "enabled": setting.enabled}
+
+
+@router.put("/api/admin/settings/{key}")
+async def update_setting(key: str, request: Request, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    body = await request.json()
+    value = body.get("value", "")
+    enabled = body.get("enabled", False)
+    result = await db.execute(select(SiteSetting).where(SiteSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        setting = SiteSetting(key=key, value=value, enabled=enabled)
+        db.add(setting)
+    else:
+        setting.value = value
+        setting.enabled = enabled
+    await db.commit()
+    return {"key": setting.key, "value": setting.value, "enabled": setting.enabled}
+
+
+@router.get("/api/settings/{key}")
+async def get_public_setting(key: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(SiteSetting).where(SiteSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting or not setting.enabled:
+        return {"key": key, "value": "", "enabled": False}
+    return {"key": setting.key, "value": setting.value, "enabled": setting.enabled}

@@ -23,6 +23,7 @@
             <button class="admin-nav-btn" data-section="users" onclick="showSection('users')">Пользователи</button>
             <button class="admin-nav-btn" data-section="stats" onclick="showSection('stats')">Статистика</button>
             <button class="admin-nav-btn" data-section="backup" onclick="showSection('backup')">Бэкап</button>
+            <button class="admin-nav-btn" data-section="settings" onclick="showSection('settings')">Настройки</button>
             <div class="admin-sidebar-footer">
                 <button class="btn btn-secondary btn-sm btn-block" onclick="logout()">Выйти</button>
             </div>
@@ -102,6 +103,21 @@
                     <button class="btn btn-secondary" onclick="downloadBackup()">Скачать бэкап</button>
                 </div>
                 <div id="backup-status" style="color:var(--text-secondary)"></div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="sec-settings" class="admin-section" style="display:none">
+                <div class="admin-section-header">
+                    <h2>Настройки сайта</h2>
+                </div>
+                <div class="card">
+                    <h3 style="color:var(--color-primary);margin-bottom:15px">Баннер поддержки (страница результатов)</h3>
+                    <label style="display:flex;align-items:center;gap:8px;margin-bottom:15px;cursor:pointer">
+                        <input type="checkbox" id="support-banner-enabled"> Показывать баннер
+                    </label>
+                    <textarea id="support-banner-text-input" rows="4" placeholder="Текст баннера поддержки" style="width:100%;padding:14px;border:2px solid var(--bg-accent);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);font-size:1em;margin-bottom:15px;resize:vertical"></textarea>
+                    <button class="btn btn-primary btn-sm" onclick="saveSupportBanner()">Сохранить</button>
+                </div>
             </section>
         </main>
     </div>
@@ -263,6 +279,7 @@ function showSection(name) {
     if (name === 'top') loadTopPlayers();
     if (name === 'users') loadUsers();
     if (name === 'stats') loadStats();
+    if (name === 'settings') loadSettings();
 }
 
 // --- Topics ---
@@ -602,6 +619,29 @@ async function triggerBackup() {
 
 async function downloadBackup() {
     window.open(BASE + '/api/admin/backup/download', '_blank');
+}
+
+// --- Settings ---
+async function loadSettings() {
+    const res = await fetch(BASE + '/api/admin/settings/support_banner', {headers: headers()});
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('support-banner-enabled').checked = data.enabled;
+    document.getElementById('support-banner-text-input').value = data.value || '';
+}
+
+async function saveSupportBanner() {
+    const value = document.getElementById('support-banner-text-input').value.trim();
+    const enabled = document.getElementById('support-banner-enabled').checked;
+    try {
+        const res = await fetch(BASE + '/api/admin/settings/support_banner', {
+            method: 'PUT',
+            headers: headers(),
+            body: JSON.stringify({value, enabled})
+        });
+        if (res.ok) showToast('Настройки сохранены', 'success');
+        else showToast('Ошибка', 'error');
+    } catch(e) { showToast('Ошибка сети', 'error'); }
 }
 </script>
 {% endblock %}

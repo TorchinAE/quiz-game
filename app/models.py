@@ -179,3 +179,11 @@ class VisitStats(Base):
     player_nickname = Column(String(100), nullable=True)
     visited_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     session_duration = Column(Integer, nullable=True)
+
+
+class SiteSetting(Base):
+    __tablename__ = "site_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, default="")
+    enabled = Column(Boolean, default=False)
