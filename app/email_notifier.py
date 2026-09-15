@@ -18,7 +18,8 @@ def _smtp_configured() -> bool:
 
 def _admin_url() -> str:
     parsed = urlparse(BASE_URL)
-    return f"{parsed.scheme}://{parsed.netloc}/к2к1"
+    base_path = parsed.path.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}{base_path}/к2к1"
 
 
 async def _send_email(subject: str, body: str, html: str | None = None):

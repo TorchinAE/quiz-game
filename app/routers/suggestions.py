@@ -1,5 +1,3 @@
-from urllib.parse import urlparse
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -7,8 +5,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_player
-from app.config import BASE_URL
 from app.database import get_db
+from app.email_notifier import _admin_url
 from app.models import SuggestedTopic, TopicVote
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
@@ -173,7 +171,7 @@ async def approve_suggestion_link(
 
     topic.status = "approved"
     await db.commit()
-    admin_url = f"{urlparse(BASE_URL).scheme}://{urlparse(BASE_URL).netloc}/к2к1"
+    admin_url = _admin_url()
     return RedirectResponse(url=admin_url, status_code=303)
 
 
@@ -189,7 +187,7 @@ async def reject_suggestion_link(
 
     topic.status = "rejected"
     await db.commit()
-    admin_url = f"{urlparse(BASE_URL).scheme}://{urlparse(BASE_URL).netloc}/к2к1"
+    admin_url = _admin_url()
     return RedirectResponse(url=admin_url, status_code=303)
 
 
