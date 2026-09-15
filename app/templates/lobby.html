@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Квиз-Тендер — Лобби{% endblock %}
+{% block title %}Квиз-Битва — Лобби{% endblock %}
 {% block content %}
 <div class="lobby-layout">
     <!-- Main area -->
     <div class="lobby-main">
         <div class="lobby-header">
-            <div style="text-align:center">
-                <img src="/quiz/static/logo.png" alt="Квиз-Тендер" class="header-logo" style="height:64px;margin-bottom:8px">
-                <h1 style="margin-bottom:6px">Квиз-Тендер</h1>
-                <div class="lobby-auth-bar" id="auth-bar" style="justify-content:center"></div>
+            <div class="lobby-header-main">
+                <img src="/quiz/static/logo.png" alt="Квиз-Битва" class="header-logo" style="height:64px">
+                <h1>Квиз-Битва</h1>
             </div>
+            <div class="lobby-auth-bar" id="auth-bar"></div>
         </div>
 
         <!-- Auth section -->
@@ -97,7 +97,7 @@
         </div>
         <!-- Feedback -->
         <div class="sidebar-section">
-            <h3>📬 Обратная связь</h3>
+            <h3>✉ Обратная связь</h3>
             <button class="btn btn-secondary btn-sm btn-block" onclick="openFeedbackModal()">Написать</button>
         </div>
     </div>

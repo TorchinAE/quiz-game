@@ -152,6 +152,13 @@ select { width: 100%; padding: 10px; border: 2px solid #0f3460; border-radius: 8
     justify-content: space-between;
     align-items: center;
     margin-bottom: 25px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.lobby-header-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
 }
 .lobby-header h1 { margin-bottom: 0; font-size: 2em; }
 .lobby-auth-bar { display: flex; align-items: center; gap: 12px; }
@@ -213,7 +220,6 @@ select { width: 100%; padding: 10px; border: 2px solid #0f3460; border-radius: 8
 .sidebar-section {
     background: var(--bg-card); border-radius: 16px; padding: 24px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    position: sticky; top: 20px;
 }
 .sidebar-section h3 {
     color: var(--color-primary); margin-bottom: 15px; font-size: 1.1em;
@@ -284,7 +290,6 @@ input[type="email"]:focus { border-color: var(--color-primary); }
 @media (max-width: 800px) {
     .lobby-layout { flex-direction: column; }
     .lobby-sidebar { width: 100%; }
-    .sidebar-section { position: static; }
 }
 
 @media (max-width: 600px) {

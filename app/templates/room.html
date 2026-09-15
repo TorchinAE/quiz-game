@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Комната — Квиз-Тендер{% endblock %}
+{% block title %}Комната — Квиз-Битва{% endblock %}
 {% block content %}
 <div id="game-area">
     <!-- Top bar -->
     <div id="top-bar">
         <div class="room-top-info">
-            <img src="/quiz/static/logo.png" alt="Квиз-Тендер" class="header-logo">
+            <img src="/quiz/static/logo.png" alt="Квиз-Битва" class="header-logo">
             <a href="/quiz/" class="btn btn-secondary btn-sm">← Лобби</a>
             <span class="room-code-badge" id="room-code"></span>
             <span id="role-badge" class="role-badge"></span>
@@ -250,7 +250,7 @@ async function loadState() {
 
         const roomName = state.name || ROOM_CODE;
         document.getElementById('lobby-title').textContent = roomName;
-        document.title = `${roomName} — Квиз-Тендер`;
+        document.title = `${roomName} — Квиз-Битва`;
 
         if (state.status === 'waiting') {
             showSection('waiting-section');
