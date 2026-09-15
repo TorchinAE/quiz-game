@@ -217,6 +217,11 @@ select { width: 100%; padding: 10px; border: 2px solid #0f3460; border-radius: 8
     background: var(--bg-card); border-radius: 16px; padding: 24px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
+.sidebar-sticky {
+    position: sticky;
+    top: 10px;
+    z-index: 10;
+}
 .sidebar-section h3 {
     color: var(--color-primary); margin-bottom: 15px; font-size: 1.1em;
 }
