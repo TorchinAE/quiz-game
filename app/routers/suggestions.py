@@ -73,11 +73,11 @@ async def create_suggestion(
     except Exception:
         pass
 
-    # Notify admin via email
+    # Notify admin via email (background)
     try:
-        from app.email_notifier import notify_suggestion_pending_email
+        from app.email_notifier import notify_suggestion_pending_email_in_background
 
-        await notify_suggestion_pending_email(
+        notify_suggestion_pending_email_in_background(
             topic.id,
             topic.name,
             topic.suggested_by,

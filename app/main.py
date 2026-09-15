@@ -239,9 +239,9 @@ async def submit_feedback(req: FeedbackRequest):
         raise HTTPException(status_code=400, detail="Все поля обязательны")
     if len(req.message) > 5000:
         raise HTTPException(status_code=400, detail="Сообщение слишком длинное")
-    from app.email_notifier import _send_email
+    from app.email_notifier import send_email_in_background
 
     subject = f"Предложения и обратная связь — {req.name.strip()}"
     body = f"От: {req.name.strip()} <{req.email.strip()}>\n\n{req.message.strip()}"
-    await _send_email(subject=subject, body=body)
+    send_email_in_background(subject=subject, body=body)
     return {"ok": True}

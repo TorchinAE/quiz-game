@@ -1,5 +1,6 @@
 """Email notification helpers. No-op when SMTP is not configured."""
 
+import asyncio
 import logging
 from datetime import datetime
 from email.message import EmailMessage
@@ -10,6 +11,11 @@ import aiosmtplib
 from app.config import ADMIN_MAIL, BASE_URL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USE_SSL, SMTP_USE_TLS, SMTP_USER
 
 logger = logging.getLogger(__name__)
+
+
+def send_email_in_background(subject: str, body: str, html: str | None = None):
+    """Fire-and-forget email send in a background task."""
+    asyncio.create_task(_send_email(subject=subject, body=body, html=html))
 
 
 def _smtp_configured() -> bool:
@@ -118,6 +124,18 @@ async def notify_suggestion_pending_email(
         body=plain,
         html=html,
     )
+
+
+def notify_suggestion_pending_email_in_background(
+    topic_id: int,
+    name: str,
+    suggested_by: str,
+    created_at: datetime | None = None,
+    votes_up: int = 0,
+    votes_down: int = 0,
+):
+    """Fire-and-forget version of notify_suggestion_pending_email."""
+    asyncio.create_task(notify_suggestion_pending_email(topic_id, name, suggested_by, created_at, votes_up, votes_down))
 
 
 async def notify_backup_complete_email():
