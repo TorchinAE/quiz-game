@@ -9,9 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_player
-from app.config import ANSWER_TIME_SECONDS, MAX_PLAYERS_PER_TEAM, QUESTIONS_PER_GAME, ROOM_CODE_LENGTH
+from app.config import MAX_PLAYERS_PER_TEAM, QUESTIONS_PER_GAME, ROOM_CODE_LENGTH
 from app.database import get_db
 from app.models import Question, Room, RoomAnswer, RoomMember, Topic
+from app.settings import get_answer_time
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 
@@ -549,7 +550,7 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
         q_result = await db.execute(select(Question).where(Question.id == qid))
         q = q_result.scalar_one_or_none()
         if q:
-            time_total = ANSWER_TIME_SECONDS
+            time_total = await get_answer_time()
             current_q = {
                 "id": q.id,
                 "text": q.text,

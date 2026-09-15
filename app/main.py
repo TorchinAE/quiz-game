@@ -11,10 +11,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.config import ROOM_INACTIVITY_TIMEOUT_SECONDS
 from app.database import async_session, init_db
 from app.models import Question, Room, Topic, VisitStats
 from app.routers import admin, auth_router, game, leaderboard, rooms, suggestions, ws
+from app.settings import get_room_inactivity_timeout
 
 
 async def load_questions_from_csv():
@@ -65,7 +65,8 @@ async def inactivity_checker():
         try:
             await asyncio.sleep(10)
             now = datetime.now(timezone.utc).replace(tzinfo=None)
-            cutoff = now - timedelta(seconds=ROOM_INACTIVITY_TIMEOUT_SECONDS)
+            timeout = await get_room_inactivity_timeout()
+            cutoff = now - timedelta(seconds=timeout)
             async with async_session() as db:
                 result = await db.execute(
                     select(Room).where(

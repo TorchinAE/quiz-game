@@ -7,9 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_admin_token, get_current_team, verify_token
-from app.config import ANSWER_TIME_SECONDS, QUESTIONS_PER_GAME
+from app.config import QUESTIONS_PER_GAME
 from app.database import get_db
 from app.models import Game, Question, Team, TeamAnswer, Topic
+from app.settings import get_answer_time
 
 router = APIRouter(prefix="/api/game", tags=["game"])
 
@@ -61,7 +62,8 @@ async def game_state(db: AsyncSession = Depends(get_db)):
             elapsed = 0.0
             if game.question_started_at:
                 elapsed = (utcnow() - game.question_started_at).total_seconds()
-            time_left = max(0, ANSWER_TIME_SECONDS - elapsed)
+            answer_time = await get_answer_time()
+            time_left = max(0, answer_time - elapsed)
             current_q = {
                 "id": q.id,
                 "text": q.text,
@@ -91,7 +93,7 @@ async def game_state(db: AsyncSession = Depends(get_db)):
         elapsed = 0.0
         if game.question_started_at:
             elapsed = (utcnow() - game.question_started_at).total_seconds()
-        if elapsed >= ANSWER_TIME_SECONDS:
+        if elapsed >= await get_answer_time():
             qid = question_ids[game.current_question_index]
             q_result = await db.execute(select(Question).where(Question.id == qid))
             q = q_result.scalar_one_or_none()
@@ -145,7 +147,7 @@ async def submit_answer(
 
     if game.question_started_at:
         elapsed = (utcnow() - game.question_started_at).total_seconds()
-        if elapsed >= ANSWER_TIME_SECONDS:
+        if elapsed >= await get_answer_time():
             raise HTTPException(status_code=400, detail="Time is up")
 
     question_ids = game.get_questions_order()

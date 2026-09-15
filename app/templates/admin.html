@@ -111,6 +111,24 @@
                     <h2>Настройки сайта</h2>
                 </div>
                 <div class="card">
+                    <h3 style="color:var(--color-primary);margin-bottom:15px">Время игры</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:15px">
+                        <div class="form-group">
+                            <label>Ожидание в комнате (сек)</label>
+                            <input type="number" id="setting-inactivity" min="10" max="600" placeholder="60">
+                        </div>
+                        <div class="form-group">
+                            <label>Время на ответ (сек)</label>
+                            <input type="number" id="setting-answer-time" min="5" max="120" placeholder="20">
+                        </div>
+                        <div class="form-group">
+                            <label>Время на чтение (сек)</label>
+                            <input type="number" id="setting-reading-time" min="3" max="60" placeholder="8">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="saveGameSettings()">Сохранить</button>
+                </div>
+                <div class="card" style="margin-top:15px">
                     <h3 style="color:var(--color-primary);margin-bottom:15px">Баннер поддержки (страница результатов)</h3>
                     <label style="display:flex;align-items:center;gap:8px;margin-bottom:15px;cursor:pointer">
                         <input type="checkbox" id="support-banner-enabled"> Показывать баннер
@@ -623,11 +641,33 @@ async function downloadBackup() {
 
 // --- Settings ---
 async function loadSettings() {
-    const res = await fetch(BASE + '/api/admin/settings/support_banner', {headers: headers()});
-    if (!res.ok) return;
-    const data = await res.json();
-    document.getElementById('support-banner-enabled').checked = data.enabled;
-    document.getElementById('support-banner-text-input').value = data.value || '';
+    const keys = ['support_banner', 'room_inactivity_timeout', 'answer_time', 'reading_time'];
+    const results = await Promise.all(keys.map(k =>
+        fetch(BASE + '/api/admin/settings/' + k, {headers: headers()}).then(r => r.json()).catch(() => ({}))
+    ));
+    const [banner, inactivity, answer, reading] = results;
+    document.getElementById('support-banner-enabled').checked = banner.enabled;
+    document.getElementById('support-banner-text-input').value = banner.value || '';
+    document.getElementById('setting-inactivity').value = inactivity.value || '';
+    document.getElementById('setting-answer-time').value = answer.value || '';
+    document.getElementById('setting-reading-time').value = reading.value || '';
+}
+
+async function saveGameSettings() {
+    const settings = [
+        {key: 'room_inactivity_timeout', el: 'setting-inactivity'},
+        {key: 'answer_time', el: 'setting-answer-time'},
+        {key: 'reading_time', el: 'setting-reading-time'},
+    ];
+    for (const s of settings) {
+        const val = document.getElementById(s.el).value.trim();
+        await fetch(BASE + '/api/admin/settings/' + s.key, {
+            method: 'PUT',
+            headers: headers(),
+            body: JSON.stringify({value: val, enabled: !!val})
+        });
+    }
+    showToast('Настройки сохранены', 'success');
 }
 
 async function saveSupportBanner() {

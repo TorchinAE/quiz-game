@@ -506,7 +506,7 @@ function showAnswerResult(data) {
     if (data.team_a_score !== undefined) document.getElementById('score-a').textContent = data.team_a_score;
     if (data.team_b_score !== undefined) document.getElementById('score-b').textContent = data.team_b_score;
 
-    startReadingTimer(8);
+    startReadingTimer(data.reading_time || 8);
 }
 
 // --- Reading Progress Bar ---

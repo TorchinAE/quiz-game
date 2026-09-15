@@ -4,7 +4,6 @@ import asyncio
 import logging
 from datetime import datetime
 from email.message import EmailMessage
-from urllib.parse import urlparse
 
 import aiosmtplib
 
@@ -22,10 +21,14 @@ def _smtp_configured() -> bool:
     return bool(ADMIN_MAIL and SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
 
 
+def _base_url() -> str:
+    """Return BASE_URL without trailing slash (e.g. http://host/quiz)."""
+    return BASE_URL.rstrip("/")
+
+
 def _admin_url() -> str:
-    parsed = urlparse(BASE_URL)
-    base_path = parsed.path.rstrip("/")
-    return f"{parsed.scheme}://{parsed.netloc}{base_path}/к2к1"
+    """Link to the admin panel page."""
+    return f"{_base_url()}/к2к1"
 
 
 async def _send_email(subject: str, body: str, html: str | None = None):
@@ -64,9 +67,10 @@ async def notify_suggestion_pending_email(
     votes_up: int = 0,
     votes_down: int = 0,
 ):
-    base = _admin_url()
-    approve_url = f"{base}/api/suggestions/{topic_id}/approve"
-    reject_url = f"{base}/api/suggestions/{topic_id}/reject"
+    admin = _admin_url()
+    api_base = _base_url()
+    approve_url = f"{api_base}/api/suggestions/{topic_id}/approve"
+    reject_url = f"{api_base}/api/suggestions/{topic_id}/reject"
     time_str = created_at.strftime("%d.%m.%Y %H:%M UTC") if created_at else "неизвестно"
 
     plain = (
@@ -74,7 +78,7 @@ async def notify_suggestion_pending_email(
         f"Голоса: +{votes_up} / -{votes_down}\n\n"
         f"Одобрить: {approve_url}\n"
         f"Отклонить: {reject_url}\n"
-        f"Панель: {base}\n"
+        f"Панель: {admin}\n"
     )
 
     html = f"""\
@@ -113,7 +117,7 @@ async def notify_suggestion_pending_email(
     </div>
 
     <p style="text-align:center;margin-top:20px;">
-      <a href="{base}" style="color:#0f9dce;text-decoration:none;">Открыть панель администратора</a>
+      <a href="{admin}" style="color:#0f9dce;text-decoration:none;">Открыть панель администратора</a>
     </p>
   </div>
 </body>

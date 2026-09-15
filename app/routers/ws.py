@@ -6,9 +6,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.auth import verify_token
-from app.config import ANSWER_GRACE_MULTIPLIER, ANSWER_TIME_SECONDS, READING_TIME_SECONDS
+from app.config import ANSWER_GRACE_MULTIPLIER
 from app.database import async_session
 from app.models import Game, Player, Question, Room, RoomAnswer, RoomMember, Team, TeamAnswer
+from app.settings import get_answer_time, get_reading_time
 
 router = APIRouter()
 
@@ -165,7 +166,7 @@ async def broadcast_question(game_id: int):
                     "difficulty": q.difficulty,
                     "index": game.current_question_index + 1,
                     "total": len(question_ids),
-                    "time_left": ANSWER_TIME_SECONDS,
+                    "time_left": await get_answer_time(),
                 },
             }
         )
@@ -215,7 +216,7 @@ async def broadcast_question_to_room(room_code: str):
                     "difficulty": q.difficulty,
                     "index": room.current_question_index + 1,
                     "total": len(question_ids),
-                    "time": ANSWER_TIME_SECONDS,
+                    "time": await get_answer_time(),
                 },
             },
         )
@@ -500,7 +501,8 @@ async def start_round(room_code: str, room):
             await db.commit()
 
     # Start grace timeout
-    grace_seconds = ANSWER_TIME_SECONDS * ANSWER_GRACE_MULTIPLIER
+    answer_time = await get_answer_time()
+    grace_seconds = answer_time * ANSWER_GRACE_MULTIPLIER
     rs.grace_task = asyncio.create_task(_grace_timeout(room_code, grace_seconds))
 
 
@@ -716,12 +718,14 @@ async def finish_round(room_code: str, room):
                 "team_a_score": team_a_score,
                 "team_b_score": team_b_score,
                 "dropped": list(rs.dropped),
+                "reading_time": await get_reading_time(),
             },
         },
     )
 
     # Schedule reading phase
-    asyncio.create_task(_reading_phase(room_code, READING_TIME_SECONDS))
+    reading_time = await get_reading_time()
+    asyncio.create_task(_reading_phase(room_code, reading_time))
 
 
 async def _reading_phase(room_code: str, delay: float):
