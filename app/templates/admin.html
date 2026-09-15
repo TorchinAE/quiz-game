@@ -508,13 +508,17 @@ async function loadVotes() {
         const statusColors = {pending: '#fdcb6e', approved: '#00b894', rejected: '#e94560'};
         document.getElementById('votes-list').innerHTML = items.map(s => `
             <div class="vote-card">
-                <span class="vote-name">${s.name}</span>
-                <span style="color:${statusColors[s.status] || '#888'};font-size:0.85em;font-weight:600">${statusLabels[s.status] || s.status}</span>
-                <span class="vote-rating">${s.rating > 0 ? '+' : ''}${s.rating}</span>
-                <span class="vote-author">от ${s.suggested_by}</span>
+                <div class="vote-card-top">
+                    <span class="vote-name">${s.name}</span>
+                    <span class="vote-card-status" style="color:${statusColors[s.status] || '#888'}">${statusLabels[s.status] || s.status}</span>
+                    <span class="vote-rating">${s.rating > 0 ? '+' : ''}${s.rating}</span>
+                    <span class="vote-author">от ${s.suggested_by}</span>
+                </div>
                 ${s.status === 'pending' ? `
-                    <button class="btn btn-sm" style="background:#00b894" onclick="moderateSuggestion(${s.id},'approve')">✓ Одобрить</button>
-                    <button class="btn btn-sm" style="background:#e94560" onclick="moderateSuggestion(${s.id},'reject')">✗ Отклонить</button>
+                    <div class="vote-card-actions">
+                        <button class="btn btn-sm" style="background:#00b894" onclick="moderateSuggestion(${s.id},'approve')">✓ Одобрить</button>
+                        <button class="btn btn-sm" style="background:#e94560" onclick="moderateSuggestion(${s.id},'reject')">✗ Отклонить</button>
+                    </div>
                 ` : ''}
             </div>
         `).join('');

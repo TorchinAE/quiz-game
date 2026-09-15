@@ -569,19 +569,50 @@ input[type="email"]:focus { border-color: var(--color-primary); }
 .vote-arrow.voted { opacity: 0.3; pointer-events: none; }
 .vote-item-rating { font-weight: 700; font-size: 0.9em; min-width: 30px; text-align: center; }
 
-/* Vote cards (placeholder) */
+/* Vote cards (admin panel) */
 .vote-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
     padding: 12px 16px;
     background: var(--bg-accent);
     border-radius: 10px;
     margin-bottom: 8px;
 }
-.vote-name { flex: 1; font-weight: 600; }
-.vote-rating { font-weight: 700; color: var(--color-primary); min-width: 40px; text-align: center; }
-.vote-author { color: var(--text-secondary); font-size: 0.85em; }
+.vote-card-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.vote-name {
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vote-card-status {
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.vote-rating {
+    font-weight: 700;
+    color: var(--color-primary);
+    min-width: 40px;
+    text-align: center;
+    white-space: nowrap;
+}
+.vote-author {
+    color: var(--text-secondary);
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+.vote-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
 
 @media (max-width: 800px) {
     .admin-layout { flex-direction: column; }
