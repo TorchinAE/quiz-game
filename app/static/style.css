@@ -156,6 +156,7 @@ select { width: 100%; padding: 10px; border: 2px solid #0f3460; border-radius: 8
 .lobby-header h1 { margin-bottom: 0; font-size: 2em; }
 .lobby-auth-bar { display: flex; align-items: center; gap: 12px; }
 .player-label { color: var(--text-secondary); font-size: 0.95em; }
+.header-logo { height: 48px; width: auto; border-radius: 8px; flex-shrink: 0; }
 
 /* Auth card */
 .auth-card { max-width: 400px; }
@@ -292,6 +293,7 @@ input[type="email"]:focus { border-color: var(--color-primary); }
     .room-teams { grid-template-columns: 1fr; }
     h1 { font-size: 1.8em; }
     .lobby-header h1 { font-size: 1.5em; }
+    .header-logo { height: 36px; }
 }
 
 /* Admin sidebar layout */
