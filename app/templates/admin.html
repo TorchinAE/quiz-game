@@ -112,18 +112,18 @@
                 </div>
                 <div class="card">
                     <h3 style="color:var(--color-primary);margin-bottom:15px">Время игры</h3>
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:15px">
-                        <div class="form-group">
-                            <label>Ожидание в комнате (сек)</label>
-                            <input type="number" id="setting-inactivity" min="10" max="600" placeholder="60">
+                    <div class="settings-grid" style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px;margin-bottom:15px">
+                        <div>
+                            <label style="display:block;margin-bottom:6px;font-weight:600;font-size:0.9em">Ожидание в комнате (сек)</label>
+                            <input type="number" id="setting-inactivity" min="10" max="600" placeholder="60" style="margin-bottom:0">
                         </div>
-                        <div class="form-group">
-                            <label>Время на ответ (сек)</label>
-                            <input type="number" id="setting-answer-time" min="5" max="120" placeholder="20">
+                        <div>
+                            <label style="display:block;margin-bottom:6px;font-weight:600;font-size:0.9em">Время на ответ (сек)</label>
+                            <input type="number" id="setting-answer-time" min="5" max="120" placeholder="20" style="margin-bottom:0">
                         </div>
-                        <div class="form-group">
-                            <label>Время на чтение (сек)</label>
-                            <input type="number" id="setting-reading-time" min="3" max="60" placeholder="8">
+                        <div>
+                            <label style="display:block;margin-bottom:6px;font-weight:600;font-size:0.9em">Время на чтение (сек)</label>
+                            <input type="number" id="setting-reading-time" min="3" max="60" placeholder="8" style="margin-bottom:0">
                         </div>
                     </div>
                     <button class="btn btn-primary btn-sm" onclick="saveGameSettings()">Сохранить</button>
@@ -542,7 +542,25 @@ async function loadTopPlayers() {
 }
 
 async function loadUsers() {
-    document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Раздел будет доступен позже</p>';
+    try {
+        const res = await fetch(BASE + '/api/admin/users', {headers: headers()});
+        if (!res.ok) { document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Ошибка загрузки</p>'; return; }
+        const users = await res.json();
+        if (!users.length) { document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Нет зарегистрированных пользователей</p>'; return; }
+        document.getElementById('users-list').innerHTML = `
+            <table class="admin-table">
+                <tr><th>#</th><th>Никнейм</th><th>Email</th><th>Очки</th><th>Игр</th><th>Дата регистрации</th></tr>
+                ${users.map((u, i) => `<tr>
+                    <td>${i+1}</td>
+                    <td>${u.nickname}</td>
+                    <td>${u.email}</td>
+                    <td>${u.total_score}</td>
+                    <td>${u.games_played}</td>
+                    <td>${u.created_at ? new Date(u.created_at).toLocaleDateString('ru-RU') : '—'}</td>
+                </tr>`).join('')}
+            </table>
+        `;
+    } catch { document.getElementById('users-list').innerHTML = '<p style="color:var(--text-secondary)">Ошибка загрузки</p>'; }
 }
 
 function showError(elId, msg) {

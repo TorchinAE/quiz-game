@@ -192,6 +192,7 @@ jobs:
               echo "QUIZ_BACKUP_USER=${{ secrets.QUIZ_BACKUP_USER }}"
               echo "QUIZ_BACKUP_KEY=${{ secrets.QUIZ_BACKUP_KEY }}"
               echo "QUIZ_BACKUP_PATH=${{ secrets.QUIZ_BACKUP_PATH }}"
+              echo "DEPLOY_HOST=${{ secrets.DEPLOY_HOST }}"
               echo "QUIZ_BASE_URL=${{ secrets.QUIZ_BASE_URL }}"
               echo "ADMIN_MAIL=${{ secrets.ADMIN_MAIL }}"
               echo "ADMIN_MAIL_DEFAULT_SENDER=${{ secrets.ADMIN_MAIL_DEFAULT_SENDER }}"

@@ -25,7 +25,13 @@ ROOM_CODE_LENGTH = 6
 # Telegram bot
 TELEGRAM_BOT_TOKEN = os.getenv("QUIZ_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_ADMIN_ID = os.getenv("QUIZ_TELEGRAM_ADMIN_ID", "")
-BASE_URL = os.getenv("QUIZ_BASE_URL", "")  # e.g. https://example.com/quiz
+
+# Base URL — prefer explicit QUIZ_BASE_URL, fall back to DEPLOY_HOST
+DEPLOY_HOST = os.getenv("DEPLOY_HOST", "")
+_base = os.getenv("QUIZ_BASE_URL", "")
+if not _base and DEPLOY_HOST:
+    _base = f"http://{DEPLOY_HOST}/quiz"
+BASE_URL = _base
 
 # Email notifications
 ADMIN_MAIL = os.getenv("ADMIN_MAIL", "")

@@ -377,6 +377,27 @@ async def get_game_stats(request: Request, days: int = 30, db: AsyncSession = De
     return [{"date": str(row.date), "count": row.count} for row in result.all()]
 
 
+# --- Users ---
+
+
+@router.get("/api/admin/users")
+async def list_users(request: Request, db: AsyncSession = Depends(get_db)):
+    require_admin(request)
+    result = await db.execute(select(Player).order_by(Player.created_at.desc()))
+    players = result.scalars().all()
+    return [
+        {
+            "id": p.id,
+            "nickname": p.nickname,
+            "email": p.email,
+            "total_score": p.total_score,
+            "games_played": p.games_played,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in players
+    ]
+
+
 # --- Suggestions (admin) ---
 
 

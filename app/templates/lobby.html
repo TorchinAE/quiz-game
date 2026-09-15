@@ -5,11 +5,11 @@
     <!-- Main area -->
     <div class="lobby-main">
         <div class="lobby-header">
-            <div style="display:flex;align-items:center;gap:12px">
-                <img src="/quiz/static/logo.png" alt="Квиз-Тендер" class="header-logo">
-                <h1>Квиз-Тендер</h1>
+            <div style="text-align:center">
+                <img src="/quiz/static/logo.png" alt="Квиз-Тендер" class="header-logo" style="height:64px;margin-bottom:8px">
+                <h1 style="margin-bottom:6px">Квиз-Тендер</h1>
+                <div class="lobby-auth-bar" id="auth-bar" style="justify-content:center"></div>
             </div>
-            <div class="lobby-auth-bar" id="auth-bar"></div>
         </div>
 
         <!-- Auth section -->
@@ -95,7 +95,17 @@
                 <div class="leaderboard-empty">Пока нет зарегистрированных игроков</div>
             </div>
         </div>
+        <!-- Feedback -->
+        <div class="sidebar-section">
+            <h3>📬 Обратная связь</h3>
+            <button class="btn btn-secondary btn-sm btn-block" onclick="openFeedbackModal()">Написать</button>
+        </div>
     </div>
+</div>
+
+<!-- Support banner at bottom of lobby -->
+<div id="lobby-support-banner" class="card" style="display:none;margin-top:20px;text-align:center">
+    <p id="lobby-support-banner-text" style="color:var(--text-secondary);font-size:1em;line-height:1.6"></p>
 </div>
 
 <!-- Private room invite modal -->
@@ -110,13 +120,6 @@
         </div>
         <button class="btn btn-success btn-block" onclick="goToPrivateRoom()">Перейти в комнату</button>
     </div>
-</div>
-
-<!-- Feedback link -->
-<div style="text-align:center;margin-top:30px;padding:20px 0">
-    <a href="#" onclick="openFeedbackModal();return false" style="color:var(--color-primary);text-decoration:none;font-size:0.95em">
-        Предложения и обратная связь
-    </a>
 </div>
 
 <!-- Feedback modal -->
@@ -160,6 +163,7 @@ document.getElementById('rooms-title').style.display = 'block';
 loadRooms();
 loadLeaderboard();
 loadSuggestions();
+loadLobbyBanner();
 setInterval(loadRooms, 3000);
 setInterval(loadLeaderboard, 10000);
 
@@ -429,6 +433,18 @@ async function loadLeaderboard() {
                 <span class="lb-score">${p.total_score}</span>
             </div>
         `).join('');
+    } catch(e) {}
+}
+
+// --- Support banner ---
+async function loadLobbyBanner() {
+    try {
+        const res = await fetch(BASE + '/api/settings/support_banner');
+        const data = await res.json();
+        if (data.enabled && data.value) {
+            document.getElementById('lobby-support-banner-text').textContent = data.value;
+            document.getElementById('lobby-support-banner').style.display = 'block';
+        }
     } catch(e) {}
 }
 

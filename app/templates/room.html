@@ -12,12 +12,12 @@
         </div>
         <div class="room-scores-bar" id="scores-bar" style="display:none">
             <div class="score-team">
-                <span class="score-label">Команда A</span>
+                <span class="score-label" id="score-a-label">Команда A</span>
                 <span class="score-value" id="score-a">0</span>
             </div>
             <span class="score-vs">vs</span>
             <div class="score-team">
-                <span class="score-label">Команда B</span>
+                <span class="score-label" id="score-b-label">Команда B</span>
                 <span class="score-value" id="score-b">0</span>
             </div>
         </div>
@@ -245,6 +245,8 @@ async function loadState() {
         document.getElementById('scores-bar').style.display = 'flex';
         document.getElementById('score-a').textContent = state.team_a?.score || 0;
         document.getElementById('score-b').textContent = state.team_b?.score || 0;
+        document.getElementById('score-a-label').textContent = state.team_a?.name || 'Команда A';
+        document.getElementById('score-b-label').textContent = state.team_b?.name || 'Команда B';
 
         const roomName = state.name || ROOM_CODE;
         document.getElementById('lobby-title').textContent = roomName;
@@ -277,16 +279,22 @@ function renderWaitingRoom(state) {
     const container = document.getElementById('waiting-teams');
     const teamAMembers = state.team_a?.members || [];
     const teamBMembers = state.team_b?.members || [];
+    const teamAName = state.team_a?.name || 'Команда A';
+    const teamBName = state.team_b?.name || 'Команда B';
     const myNickname = playerData ? playerData.nickname : null;
 
     const myTeamA = teamAMembers.some(m => m.nickname === myNickname);
     const myTeamB = teamBMembers.some(m => m.nickname === myNickname);
 
     function renderMember(m) {
-        if (m.nickname === myNickname && !isObserver) {
-            return `<span class="member-item"><span class="member-name">${m.nickname}</span> <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:0.75em" onclick="editNickname()">✏️</button></span>`;
+        return `<span class="member-item"><span class="member-name">${m.nickname}</span></span>`;
+    }
+
+    function renderTeamName(name, team, isMine) {
+        if (isMine && !isObserver) {
+            return `<div class="team-name">${name} ⭐ <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:0.75em" onclick="renameTeam('${team}')">✏️</button></div>`;
         }
-        return `<span class="member-item">${m.nickname}</span>`;
+        return `<div class="team-name">${name} ${isMine ? '⭐' : ''}</div>`;
     }
 
     const switchHint = !isObserver ? '<div style="font-size:0.8em;color:var(--text-secondary);margin-top:8px">Нажмите на другую команду, чтобы переключиться</div>' : '';
@@ -294,13 +302,13 @@ function renderWaitingRoom(state) {
     container.innerHTML = `
         <div class="card card-compact team-card ${myTeamA ? 'team-card-mine' : ''} ${!isObserver && myTeamB ? 'team-card-clickable' : ''}"
              ${!isObserver && myTeamB ? 'onclick="switchTeam(\'A\')"' : ''}>
-            <div class="team-name">Команда A ${myTeamA ? '⭐' : ''}</div>
+            ${renderTeamName(teamAName, 'A', myTeamA)}
             <div class="team-members">${teamAMembers.map(renderMember).join(', ') || 'Пусто'}</div>
             ${myTeamA ? switchHint : ''}
         </div>
         <div class="card card-compact team-card ${myTeamB ? 'team-card-mine' : ''} ${!isObserver && myTeamA ? 'team-card-clickable' : ''}"
              ${!isObserver && myTeamA ? 'onclick="switchTeam(\'B\')"' : ''}>
-            <div class="team-name">Команда B ${myTeamB ? '⭐' : ''}</div>
+            ${renderTeamName(teamBName, 'B', myTeamB)}
             <div class="team-members">${teamBMembers.map(renderMember).join(', ') || 'Пусто'}</div>
             ${myTeamB ? switchHint : ''}
         </div>
@@ -597,6 +605,22 @@ async function switchTeam(targetTeam) {
         const data = await res.json();
         if (!res.ok) return showToast(data.detail, 'error');
         showToast(`Перешли в команду ${targetTeam}`, 'success');
+        loadState();
+    } catch(e) { showToast('Ошибка сети', 'error'); }
+}
+
+async function renameTeam(team) {
+    const name = prompt('Новое название команды (до 30 символов):');
+    if (!name || !name.trim()) return;
+    try {
+        const res = await fetchAuth(`${BASE}/api/rooms/${ROOM_CODE}/rename-team`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({name: name.trim()})
+        });
+        const data = await res.json();
+        if (!res.ok) return showToast(data.detail, 'error');
+        showToast('Название обновлено', 'success');
         loadState();
     } catch(e) { showToast('Ошибка сети', 'error'); }
 }

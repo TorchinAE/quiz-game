@@ -200,15 +200,16 @@ async def join_room(
     nickname = player.get("nickname", "Unknown")
     player_id = player.get("player_id")
 
-    # Check if already in this room
+    # If already in this room, allow re-entry (e.g. after page refresh)
     existing = await db.execute(
         select(RoomMember).where(
             RoomMember.room_id == room.id,
             RoomMember.nickname == nickname,
         )
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Already in this room")
+    existing_member = existing.scalar_one_or_none()
+    if existing_member:
+        return {"ok": True, "room_code": room.code, "team": existing_member.team, "role": existing_member.role}
 
     if req.team:
         team = req.team.upper()
@@ -363,6 +364,71 @@ async def switch_team(
     await broadcast_room_update(room.code)
 
     return {"ok": True, "team": target_team}
+
+
+class RenameTeamRequest(BaseModel):
+    name: str
+
+
+@router.post("/{code}/rename-team")
+async def rename_team(
+    code: str,
+    req: RenameTeamRequest,
+    player: dict = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Room).where(Room.code == code.upper()))
+    room = result.scalar_one_or_none()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.status != "waiting":
+        raise HTTPException(status_code=400, detail="Can only rename in waiting room")
+
+    nickname = player.get("nickname", "Unknown")
+    member_result = await db.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.id,
+            RoomMember.nickname == nickname,
+            RoomMember.role == "player",
+        )
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="You are not in this room")
+
+    name = req.name.strip()
+    if not name or len(name) > 30:
+        raise HTTPException(status_code=400, detail="Название от 1 до 30 символов")
+
+    # Store team name in room name: "RoomName | TeamA:Name1 | TeamB:Name2"
+    import re
+
+    parts = room.name.split(" | ") if room.name else []
+    base_name = parts[0] if parts else room.name
+    team_names = {}
+    for p in parts[1:]:
+        m = re.match(r"^(Team[AB]):(.+)$", p)
+        if m:
+            team_names[m.group(1)] = m.group(2)
+
+    team_key = f"Team{member.team}"
+    team_names[team_key] = name
+
+    new_name = base_name
+    for k in ("TeamA", "TeamB"):
+        if k in team_names:
+            new_name += f" | {k}:{team_names[k]}"
+
+    room.name = new_name
+    room.last_activity_at = utcnow()
+    db.add(room)
+    await db.commit()
+
+    from app.routers.ws import broadcast_room_update
+
+    await broadcast_room_update(room.code)
+
+    return {"ok": True, "name": name}
 
 
 @router.put("/{code}/nickname")
@@ -610,20 +676,36 @@ async def room_state(code: str, db: AsyncSession = Depends(get_db)):
     team_a_score = sum(m.score for m in members if m.team == "A" and m.role == "player")
     team_b_score = sum(m.score for m in members if m.team == "B" and m.role == "player")
 
+    # Parse team names from room.name
+    import re
+
+    team_a_name = "Команда A"
+    team_b_name = "Команда B"
+    if room.name:
+        for part in room.name.split(" | "):
+            m = re.match(r"^(TeamA):(.+)$", part)
+            if m:
+                team_a_name = m.group(2)
+            m = re.match(r"^(TeamB):(.+)$", part)
+            if m:
+                team_b_name = m.group(2)
+
     return {
         "status": room.status,
         "code": room.code,
-        "name": room.name or f"Комната {room.id}",
+        "name": room.name.split(" | ")[0] if room.name else f"Комната {room.id}",
         "is_private": room.is_private,
         "topic": topic_name,
         "topic_id": room.topic_id,
         "current_question": current_q,
         "round_phase": room.round_phase,
         "team_a": {
+            "name": team_a_name,
             "score": team_a_score,
             "members": [{"id": m.id, "nickname": m.nickname} for m in members if m.team == "A" and m.role == "player"],
         },
         "team_b": {
+            "name": team_b_name,
             "score": team_b_score,
             "members": [{"id": m.id, "nickname": m.nickname} for m in members if m.team == "B" and m.role == "player"],
         },

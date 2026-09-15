@@ -166,8 +166,8 @@ async def test_join_room_already_in(client):
 
     await client.post(f"/api/rooms/{code}/join", json={"team": "A", "role": "player"}, headers=headers)
     res = await client.post(f"/api/rooms/{code}/join", json={"team": "B", "role": "player"}, headers=headers)
-    assert res.status_code == 400
-    assert "already" in res.json()["detail"].lower()
+    assert res.status_code == 200
+    assert res.json()["team"] == "A"  # returns existing membership
 
 
 async def test_join_room_invalid_team(client):
